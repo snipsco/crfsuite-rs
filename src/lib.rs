@@ -31,6 +31,7 @@ mod crfsuite_sys {
 use errors::*;
 use crfsuite_sys::crfsuite_create_instance_from_file;
 
+#[derive(Debug)]
 pub struct Attribute {
     pub attr: String,
     pub value: f64
@@ -129,7 +130,7 @@ impl Tagger {
                 };
 
                 if 0 <= aid {
-                    let cont = null_mut();
+                    let mut cont = &mut unsafe { zeroed() };
                     unsafe { crfsuite_sys::crfsuite_attribute_set(cont, aid, item[i].value) };
                     unsafe { crfsuite_sys::crfsuite_item_append_attribute(inst_item, cont) };
                 }
@@ -254,164 +255,94 @@ mod tests {
     use super::Tagger;
     use super::Attribute;
 
-
     #[test]
-    fn it_works() {
-        let t = Tagger::create_from_file("/home/fredszaq/Work/crfsuite-rs-binding/model51B53Y.crfsuite");
-
-        assert!(t.is_ok());
+    fn tagger_works() {
+        let t = Tagger::create_from_file("test-data/modela78m0U.crfsuite");
 
         let input = vec![
             vec![
-                Attribute { attr: "is_first=1".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1=xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1=this".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters=011010101".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]=0110001111".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]=a".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]=rare_word a".to_string(), value: 1.0 },
+                Attribute { attr: "is_first:1".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_1:Xxx".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_2:Xxx xxx".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1:set".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters:01010000000".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[+1]:11110111111111".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[+2]:to".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_2[+1]:rare_word to".to_string(), value: 1.0 }
             ],
             vec![
-                Attribute { attr: "word_cluster_brown_clusters[-1]=011010101".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1=xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_3[-1]=xxx xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]=this".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters=0110001111".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]=a".to_string(), value: 1.0 },
-                Attribute { attr: "is_first[-1]=1".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]=0101011111".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]=a rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[-1]:01010000000".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_2[-1]:Xxx xxx".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_3[-1]:Xxx xxx xxx".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[-1]:set".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters:11110111111111".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[+1]:to".to_string(), value: 1.0 },
+                Attribute { attr: "is_first[-1]:1".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[+1]:1010".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_2[+1]:to rare_word".to_string(), value: 1.0 }
             ],
             vec![
-                Attribute { attr: "is_first[-2]=1".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-1]=0110001111".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-2]=011010101".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[-2]=this rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1=xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_3[-1]=xxx xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1=a".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters=0101011111".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]=this".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]=rare_word rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "is_first[-2]:1".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[-1]:11110111111111".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[-2]:set".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[-2]:01010000000".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                Attribute { attr: "is_last[+2]:1".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_2[-2]:set rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_3[-1]:xxx xxx xxx".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1:to".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters:1010".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[+1]:11111110100".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[+2]:please".to_string(), value: 1.0 },
+                Attribute { attr: "is_digit[+1]:1".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_2[+1]:rare_word please".to_string(), value: 1.0 }
             ],
             vec![
-                Attribute { attr: "ngram_2[-2]=rare_word a".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-1]=0101011111".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-2]=0110001111".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "token_is_in_dummy_entity_1=U-".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1=xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_3[-1]=xxx xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]=a".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]=1111011110010".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]=with".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]=rare_word with".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_2[-2]:rare_word to".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[-1]:1010".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[+1]:11101010110".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[-2]:11110111111111".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                Attribute { attr: "is_digit:1".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[-1]:to".to_string(), value: 1.0 },
+                Attribute { attr: "is_last[+1]:1".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters:11111110100".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[+1]:please".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                Attribute { attr: "built-in-snips/number:U-".to_string(), value: 1.0 }
             ],
             vec![
-                Attribute { attr: "ngram_2[-2]=a rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]=a".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-2]=0101011111".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1=xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_3[-1]=xxx xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "token_is_in_dummy_entity_1[-1]=U-".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters=1111011110010".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]=with".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]=1000100".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]=with rare_word".to_string(), value: 1.0 },
-            ],
-            vec![
-                Attribute { attr: "token_is_in_dummy_entity_1[-2]=U-".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-1]=1111011110010".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[-2]=rare_word rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1=xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_3[-1]=xxx xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1=with".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters=1000100".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]=011010100".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]=rare_word rare_word".to_string(), value: 1.0 },
-            ],
-            vec![
-                Attribute { attr: "ngram_2[-2]=rare_word with".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-1]=1000100".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-2]=1111011110010".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "is_last[+2]=1".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1=xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_3[-1]=xxx xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]=with".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters=011010100".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]=please".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]=rare_word please".to_string(), value: 1.0 },
-            ],
-            vec![
-                Attribute { attr: "ngram_2[-2]=with rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-1]=011010100".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]=11101010110".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-2]=1000100".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]=xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "is_last[+1]=1".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]=please".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]=with".to_string(), value: 1.0 },
-                Attribute { attr: "token_is_in_dummy_entity_2=U-".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1=xxx".to_string(), value: 1.0 },
-            ],
-            vec![
-                Attribute { attr: "ngram_2[-2]=rare_word rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-2]=011010100".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]=rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "is_last=1".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters=11101010110".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1=please".to_string(), value: 1.0 },
-                Attribute { attr: "token_is_in_dummy_entity_2[-1]=U-".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]=rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_2[-2]:to rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[-1]:11111110100".to_string(), value: 1.0 },
+                Attribute { attr: "built-in-snips/number[-1]:U-".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters[-2]:1010".to_string(), value: 1.0 },
+                Attribute { attr: "is_digit[-1]:1".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                Attribute { attr: "is_last:1".to_string(), value: 1.0 },
+                Attribute { attr: "word_cluster_brown_clusters:11101010110".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1:please".to_string(), value: 1.0 },
+                Attribute { attr: "ngram_1[-2]:to".to_string(), value: 1.0 }
             ]
         ];
 
         let r = t.unwrap().tag(input);
 
-        assert!(r.is_ok());
-
         assert_eq!(r.unwrap(), vec![
             "O",
             "O",
             "O",
-            "B-dummy_slot_name",
-            "O",
-            "O",
-            "O",
-            "B-dummy_slot_name2",
+            "B-target-en",
             "O"
         ]);
     }
