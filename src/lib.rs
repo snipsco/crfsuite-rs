@@ -5,6 +5,7 @@ extern crate libc;
 
 extern crate crfsuite_sys;
 
+use std::f64;
 use std::ffi::{CStr, CString};
 use std::mem::transmute;
 use std::mem::zeroed;
@@ -168,6 +169,9 @@ impl Tagger {
         if let Some(get_labels) = self.model.get_labels {
             let r = unsafe { get_labels(&mut self.model, &mut labels) };
             if r != 0 {
+                if let Some(release) = unsafe { (*labels) }.release {
+                    unsafe { release(labels); }
+                } // let's not mask the error with this failed release...
                 bail!("failed to obtain the dictionary interface for labels")
             }
         } else {
@@ -176,7 +180,7 @@ impl Tagger {
 
         let mut labels = unsafe { *labels };
 
-        let mut score = 0.0;
+        let mut score = f64::NAN;
         let mut path = vec![0; t];
 
         if let Some(viterbi) = self.tagger.viterbi {
@@ -221,9 +225,86 @@ impl Tagger {
         Ok(yseq)
     }
 
-    /*pub fn probability(&self, tags: Vec<String>) -> f64 {
-        unimplemented!();
-    }*/
+    pub fn probability(&mut self, tags: Vec<String>) -> Result<f64> {
+        let t: usize = if let Some(length) = self.tagger.length {
+            unsafe { length(&mut self.tagger) as usize }
+        } else {
+            bail!("could not get tagger length : no callback")
+        };
+
+        if t <= 0 { return Ok(0.0) }
+        if t != tags.len() {
+            bail!("The number of items and labels differ |x| = {}, |y| = {}", t, tags.len());
+        }
+
+        let mut labels = null_mut();
+
+        if let Some(get_labels) = self.model.get_labels {
+            let r = unsafe { get_labels(&mut self.model, &mut labels) };
+            if r != 0 {
+                if let Some(release) = unsafe { (*labels) }.release {
+                    unsafe { release(labels); }
+                } // let's not mask the error with this failed release...
+                bail!("Failed to obtain the dictionary interface for labels")
+            }
+        } else {
+            bail!("could not get labels : no callback")
+        }
+
+        let mut labels = unsafe { *labels };
+
+        let mut path = vec![0; t];
+
+        if let Some(to_id) = labels.to_id {
+            for i in 0..t {
+                let l = unsafe { to_id(&mut labels, CString::new(tags[i].as_bytes())?.into_raw()) };
+                if l < 0 {
+                    if let Some(release) = labels.release {
+                        unsafe { release(&mut labels); }
+                    } // let's not mask the error with this failed release...
+                    bail!("Failed to convert into label identifier : {}", tags[i]);
+                }
+                path[i] = l;
+            }
+        } else {
+            bail!("could not call to_id on labels : no callback")
+        };
+
+        let mut score = f64::NAN;
+
+        if let Some(score_f) = self.tagger.score {
+            let r = unsafe { score_f(&mut self.tagger, &mut path[0], &mut score) };
+            if r != 0 {
+                if let Some(release) = labels.release {
+                    unsafe { release(&mut labels); }
+                } // let's not mask the error with this failed release...
+                bail!("Failed to score the label sequence")
+            }
+        } else {
+            bail!("could not get score : no callback")
+        }
+        let mut lognorm = f64::NAN;
+
+        if let Some(lognorm_f) = self.tagger.lognorm {
+            let r = unsafe { lognorm_f(&mut self.tagger, &mut lognorm) };
+            if r != 0 {
+                if let Some(release) = labels.release {
+                    unsafe { release(&mut labels); }
+                } // let's not mask the error with this failed release...
+                bail!("Failed to compute the partition factor")
+            }
+        } else {
+            bail!("could not get lognorm : no callback")
+        }
+
+        if let Some(release) = labels.release {
+            unsafe { release(&mut labels); }
+        } else {
+            bail!("could not get release : no callback")
+        }
+
+        Ok((score - lognorm).exp())
+    }
 
     /*pub fn marginal(&self, label: &str, position: usize) -> f64 {
         unimplemented!();
@@ -338,5 +419,107 @@ mod tests {
             "B-target-en",
             "O"
         ]);
+    }
+
+    #[test]
+    fn probability_works() {
+        let mut t = Tagger::create_from_file("test-data/modelo62R_B.crfsuite").unwrap();
+
+        let input = vec![
+            vec![Attribute { attr: "is_first:1".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_1:Xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_2:Xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "is_in_gazetteer_states_us[+1]:U-".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters:11110111110000".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[+1]:me".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[+1]:01010011100".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_2[+1]:me rare_word".to_string(), value: 1.0 }],
+            vec![Attribute { attr: "word_cluster_brown_clusters[-1]:11110111110000".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_2[-1]:Xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "is_in_gazetteer_states_us:U-".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_3[-1]:Xxx xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1:me".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters:01010011100".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "is_first[-1]:1".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[+1]:11111110101111".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_2[+1]:rare_word rare_word".to_string(), value: 1.0 }],
+            vec![Attribute { attr: "is_first[-2]:1".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[-1]:01010011100".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[+1]:11110011011100".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[-2]:11110111110000".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_2[-2]:rare_word me".to_string(), value: 1.0 },
+                 Attribute { attr: "built-in-snips/number:U-".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_3[-1]:xxx xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "is_in_gazetteer_states_us[-1]:U-".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[-1]:me".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters:11111110101111".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[+2]:of".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_2[+1]:rare_word of".to_string(), value: 1.0 }],
+            vec![Attribute { attr: "ngram_2[-2]:me rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[-1]:11111110101111".to_string(), value: 1.0 },
+                 Attribute { attr: "built-in-snips/number[-1]:U-".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[-2]:01010011100".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "is_last[+2]:1".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[+1]:10110".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_3[-1]:xxx xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "is_in_gazetteer_cities_world[+1]:U-".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters:11110011011100".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[+1]:of".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[-2]:me".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_2[+1]:of rare_word".to_string(), value: 1.0 }],
+            vec![Attribute { attr: "ngram_2[-2]:rare_word rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[-1]:11110011011100".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[+1]:1110010101".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[-2]:11111110101111".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                 Attribute { attr: "built-in-snips/number[-2]:U-".to_string(), value: 1.0 },
+                 Attribute { attr: "is_in_gazetteer_cities_world:U-".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1:of".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "is_last[+1]:1".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters:10110".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 }],
+            vec![Attribute { attr: "ngram_2[-2]:rare_word of".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[-1]:10110".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters[-2]:11110011011100".to_string(), value: 1.0 },
+                 Attribute { attr: "is_in_gazetteer_cities_world[-1]:U-".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[-1]:of".to_string(), value: 1.0 },
+                 Attribute { attr: "is_last:1".to_string(), value: 1.0 },
+                 Attribute { attr: "word_cluster_brown_clusters:1110010101".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                 Attribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 }]];
+
+        t.set(input).unwrap();
+
+        let p1 = t.probability(vec!["O".to_string(), "O".to_string(), "B-snips/number".to_string(), "O".to_string(), "O".to_string(), "O".to_string()]).unwrap();
+
+        assert!(p1.is_finite());
+        assert!(p1 - 0.999977801144 < 1e-6);
+
+        let p2 = t.probability(vec!["O".to_string(), "O".to_string(), "O".to_string(), "O".to_string(), "O".to_string(), "O".to_string()]).unwrap();
+
+        assert!(p2.is_finite());
+        assert!(p2 - 9.73062095825e-06 < 1e-12)
     }
 }
