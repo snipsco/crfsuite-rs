@@ -11,7 +11,10 @@ use std::mem::transmute;
 use std::mem::zeroed;
 use std::path::Path;
 use std::ptr::{null, null_mut};
+use std::os::raw::{c_char, c_int};
 use std::slice;
+
+use crfsuite_sys::floatval_t;
 
 mod errors {
     error_chain! {
@@ -35,8 +38,8 @@ type Item = Vec<Attribute>;
 type ItemSequence = Vec<Item>;
 
 pub struct Tagger {
-    model: crfsuite_sys::crfsuite_model_t,
-    tagger: crfsuite_sys::crfsuite_tagger_t
+    model: ModelWrapper,
+    tagger: TaggerWrapper
 }
 
 impl Tagger {
@@ -53,26 +56,20 @@ impl Tagger {
             bail!("error while creating instance : non zero C return code...")
         }
 
-        let model: &crfsuite_sys::crfsuite_model_t = unsafe { transmute(model) };
+        let model: *mut crfsuite_sys::crfsuite_model_t = unsafe { transmute(model) };
 
-        let mut model = *model;
+        let mut model = ModelWrapper { model };
 
         let mut tagger = null_mut();
 
-        if let Some(t) = model.get_tagger {
-            let r = unsafe { t(&mut model, &mut tagger) };
-            if r != 0 {
-                bail!("error while getting tagger : non zero C return code...")
-            }
-        } else {
-            bail!("could not retrieve tagger : no callback")
+        let r = model.get_tagger(&mut tagger);
+        if r != 0 {
+            bail!("error while getting tagger : non zero C return code...")
         }
-
-        let tagger = unsafe { *tagger };
 
         Ok(Tagger {
             model: model,
-            tagger: tagger
+            tagger: TaggerWrapper { tagger }
         })
     }
 
@@ -80,9 +77,35 @@ impl Tagger {
         unimplemented!();
     }*/
 
-    /*pub fn labels(&self) -> Vec<String> {
-        unimplemented!();
-    }*/
+    pub fn labels(&mut self) -> Result<Vec<String>> {
+        let mut labels = null_mut();
+
+        let r = self.model.get_labels(&mut labels);
+        if r != 0 {
+            // TODO try to call release raw labels pointer ?
+            bail!("failed to obtain the dictionary interface for labels")
+        }
+
+        let mut labels = DictionaryWrapper { dict: labels };
+
+
+
+        let mut lseq = Vec::with_capacity(labels.num() as usize);
+
+        for i in 0..labels.num() {
+            let mut label = null();
+            let r = labels.id_to_string(i, &mut label);
+            if r != 0 {
+                bail!("failed to convert a label identifier to string")
+            }
+
+            lseq.push(unsafe { CStr::from_ptr(label) }.to_str()?.to_string());
+
+            labels.free(label);
+        }
+
+        Ok(lseq)
+    }
 
     pub fn tag(&mut self, input: ItemSequence) -> Result<Vec<String>> {
         &self.set(input)?;
@@ -91,15 +114,11 @@ impl Tagger {
 
     pub fn set(&mut self, input: ItemSequence) -> Result<()> {
         let mut attrs = null_mut();
-        if let Some(g) = self.model.get_attrs {
-            let r = unsafe { g(&mut self.model, &mut attrs) };
-            if r != 0 {
-                bail!("error while getting tagger : non zero C return code...")
-            }
-        } else {
-            bail!("could not create attrs : no callback")
+        let r = self.model.get_attrs(&mut attrs);
+        if r != 0 {
+            bail!("error while getting tagger : non zero C return code...")
         }
-        let mut attrs = unsafe { *attrs };
+        let mut attrs = DictionaryWrapper { dict: attrs };
         let mut inst = unsafe { zeroed() };
 
         unsafe {
@@ -117,11 +136,7 @@ impl Tagger {
             unsafe { crfsuite_sys::crfsuite_item_init(inst_item) };
 
             for i in 0..item.len() {
-                let aid = if let Some(to_id) = attrs.to_id {
-                    unsafe { to_id(&mut attrs, CString::new(item[i].attr.as_bytes())?.into_raw()) }
-                } else {
-                    bail!("could not call to_id on attr : no callback")
-                };
+                let aid = attrs.str_to_id(CString::new(item[i].attr.as_bytes())?.into_raw());
 
                 if 0 <= aid {
                     let mut cont = &mut unsafe { zeroed() };
@@ -131,107 +146,59 @@ impl Tagger {
             }
         }
 
-        if let Some(set) = self.tagger.set {
-            let r = unsafe { set(&mut self.tagger, &mut inst) };
-            if r != 0 {
-                unsafe { crfsuite_sys::crfsuite_instance_finish(&mut inst); }
-                if let Some(release) = attrs.release {
-                    unsafe { release(&mut attrs) };
-                } // let's not mask the no zero return code error with this failed release...
 
-                bail!("error while getting tagger : non zero C return code...")
-            }
-        } else {
-            bail!("could not create attrs : no callback")
+        let r = self.tagger.set(&mut inst);
+
+        if r != 0 {
+            unsafe { crfsuite_sys::crfsuite_instance_finish(&mut inst); }
+            bail!("error while getting tagger : non zero C return code...")
         }
 
         unsafe { crfsuite_sys::crfsuite_instance_finish(&mut inst); }
-        if let Some(release) = attrs.release {
-            unsafe { release(&mut attrs) };
-        } else {
-            bail!("could not release attrs : no callback...")
-        }
 
         Ok(())
     }
 
     pub fn viterbi(&mut self) -> Result<Vec<String>> {
-        let t: usize = if let Some(length) = self.tagger.length {
-            unsafe { length(&mut self.tagger) as usize }
-        } else {
-            bail!("could not get tagger length : no callback")
-        };
-
+        let t: usize = self.tagger.length() as usize;
         if t <= 0 { return Ok(vec![]) }
 
         let mut labels = null_mut();
 
-        if let Some(get_labels) = self.model.get_labels {
-            let r = unsafe { get_labels(&mut self.model, &mut labels) };
-            if r != 0 {
-                if let Some(release) = unsafe { (*labels) }.release {
-                    unsafe { release(labels); }
-                } // let's not mask the error with this failed release...
-                bail!("failed to obtain the dictionary interface for labels")
-            }
-        } else {
-            bail!("could not get labels : no callback")
+        let r = self.model.get_labels(&mut labels);
+        if r != 0 {
+            // TODO try to call release raw labels pointer ?
+            bail!("failed to obtain the dictionary interface for labels")
         }
 
-        let mut labels = unsafe { *labels };
+        let mut labels = DictionaryWrapper { dict: labels };
 
         let mut score = f64::NAN;
         let mut path = vec![0; t];
 
-        if let Some(viterbi) = self.tagger.viterbi {
-            let r = unsafe { viterbi(&mut self.tagger, &mut path[0], &mut score) };
-            if r != 0 {
-                if let Some(release) = labels.release {
-                    unsafe { release(&mut labels); }
-                } // let's not mask the error with this failed release...
-                bail!("failed to find the viterbi path")
-            }
+        let r = self.tagger.viterbi(&mut path[0], &mut score);
+        if r != 0 {
+            bail!("failed to find the viterbi path")
         }
 
         let mut yseq = Vec::with_capacity(t);
 
         for i in 0..t {
             let mut label = null();
-            if let Some(to_string) = labels.to_string {
-                let r = unsafe { to_string(&mut labels, path[i], &mut label) };
-                if r != 0 {
-                    if let Some(release) = labels.release {
-                        unsafe { release(&mut labels); }
-                    } // let's not mask the error with this failed release...
-                    bail!("failed to convert a label identifier to string")
-                }
-            } else {
-                bail!("could not transform to string : no callback")
+            let r = labels.id_to_string(path[i], &mut label);
+            if r != 0 {
+                bail!("failed to convert a label identifier to string")
             }
+
             yseq.push(unsafe { CStr::from_ptr(label) }.to_str()?.to_string());
 
-            if let Some(free) = labels.free {
-                unsafe { free(&mut labels, label) };
-            } else {
-                bail!("could not free label : no callback");
-            }
-        }
-
-        if let Some(release) = labels.release {
-            unsafe { release(&mut labels); }
-        } else {
-            bail!("could not release labels : no callback")
+            labels.free(label);
         }
         Ok(yseq)
     }
 
     pub fn probability(&mut self, tags: Vec<String>) -> Result<f64> {
-        let t: usize = if let Some(length) = self.tagger.length {
-            unsafe { length(&mut self.tagger) as usize }
-        } else {
-            bail!("could not get tagger length : no callback")
-        };
-
+        let t: usize = self.tagger.length() as usize;
         if t <= 0 { return Ok(0.0) }
         if t != tags.len() {
             bail!("The number of items and labels differ |x| = {}, |y| = {}", t, tags.len());
@@ -239,68 +206,38 @@ impl Tagger {
 
         let mut labels = null_mut();
 
-        if let Some(get_labels) = self.model.get_labels {
-            let r = unsafe { get_labels(&mut self.model, &mut labels) };
-            if r != 0 {
-                if let Some(release) = unsafe { (*labels) }.release {
-                    unsafe { release(labels); }
-                } // let's not mask the error with this failed release...
-                bail!("Failed to obtain the dictionary interface for labels")
-            }
-        } else {
-            bail!("could not get labels : no callback")
+        let r = self.model.get_labels(&mut labels);
+        if r != 0 {
+            // TODO try to call release raw labels pointer ?
+            bail!("Failed to obtain the dictionary interface for labels")
         }
 
-        let mut labels = unsafe { *labels };
+        let mut labels = DictionaryWrapper { dict: labels };
 
         let mut path = vec![0; t];
 
-        if let Some(to_id) = labels.to_id {
-            for i in 0..t {
-                let l = unsafe { to_id(&mut labels, CString::new(tags[i].as_bytes())?.into_raw()) };
-                if l < 0 {
-                    if let Some(release) = labels.release {
-                        unsafe { release(&mut labels); }
-                    } // let's not mask the error with this failed release...
-                    bail!("Failed to convert into label identifier : {}", tags[i]);
-                }
-                path[i] = l;
+        for i in 0..t {
+            let l = labels.str_to_id(CString::new(tags[i].as_bytes())?.into_raw());
+            if l < 0 {
+                bail!("Failed to convert into label identifier : {}", tags[i]);
             }
-        } else {
-            bail!("could not call to_id on labels : no callback")
-        };
+            path[i] = l;
+        }
+
 
         let mut score = f64::NAN;
 
-        if let Some(score_f) = self.tagger.score {
-            let r = unsafe { score_f(&mut self.tagger, &mut path[0], &mut score) };
-            if r != 0 {
-                if let Some(release) = labels.release {
-                    unsafe { release(&mut labels); }
-                } // let's not mask the error with this failed release...
-                bail!("Failed to score the label sequence")
-            }
-        } else {
-            bail!("could not get score : no callback")
+
+        let r = self.tagger.score(&mut path[0], &mut score);
+        if r != 0 {
+            bail!("Failed to score the label sequence")
         }
+
         let mut lognorm = f64::NAN;
 
-        if let Some(lognorm_f) = self.tagger.lognorm {
-            let r = unsafe { lognorm_f(&mut self.tagger, &mut lognorm) };
-            if r != 0 {
-                if let Some(release) = labels.release {
-                    unsafe { release(&mut labels); }
-                } // let's not mask the error with this failed release...
-                bail!("Failed to compute the partition factor")
-            }
-        } else {
-            bail!("could not get lognorm : no callback")
-        }
-
-        if let Some(release) = labels.release {
-            unsafe { release(&mut labels); }
-        } else {
-            bail!("could not get release : no callback")
+        let r = self.tagger.lognorm(&mut lognorm);
+        if r != 0 {
+            bail!("Failed to compute the partition factor")
         }
 
         Ok((score - lognorm).exp())
@@ -311,15 +248,175 @@ impl Tagger {
     }*/
 }
 
-impl Drop for Tagger {
-    fn drop(&mut self) {
-        // TODO
-        /*if let Some(r) = self.tagger.release {
-            unsafe { r(&mut self.tagger) };
+struct DictionaryWrapper {
+    dict: *mut crfsuite_sys::crfsuite_dictionary_t
+}
+
+impl DictionaryWrapper {
+    fn str_to_id(&mut self, str: *const c_char) -> c_int {
+        unsafe {
+            if let Some(to_id) = (*self.dict).to_id {
+                to_id(self.dict, str)
+            } else {
+                panic!("no callback for to_id")
+            }
         }
-        if let Some(r) = self.model.release {
-            unsafe { r(&mut self.model) };
-        }*/
+    }
+
+    fn id_to_string(&mut self, id: c_int, pstr: *mut *const c_char) -> c_int {
+        unsafe {
+            if let Some(to_string) = (*self.dict).to_string {
+                to_string(self.dict, id, pstr)
+            } else {
+                panic!("no callback for to_string")
+            }
+        }
+    }
+
+    fn free(&mut self, str: *const c_char) {
+        unsafe {
+            if let Some(free) = (*self.dict).free {
+                free(self.dict, str)
+            } else {
+                panic!("no callback for free")
+            }
+        }
+    }
+
+    fn num(&mut self) -> c_int {
+        unsafe {
+            if let Some(num) = (*self.dict).num {
+                num(self.dict)
+            } else {
+                panic!("no callback for num")
+            }
+        }
+    }
+}
+
+impl Drop for DictionaryWrapper {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(release) = (*self.dict).release {
+                release(self.dict);
+            } else {
+                panic!("no callback for release")
+            }
+        }
+    }
+}
+
+struct TaggerWrapper {
+    tagger: *mut crfsuite_sys::crfsuite_tagger_t
+}
+
+impl TaggerWrapper {
+    fn set(&mut self, inst: *mut crfsuite_sys::crfsuite_instance_t) -> c_int {
+        unsafe {
+            if let Some(set) = (*self.tagger).set {
+                set(self.tagger, inst)
+            } else {
+                panic!("no callback for set")
+            }
+        }
+    }
+
+    fn length(&mut self) -> ::std::os::raw::c_int {
+        unsafe {
+            if let Some(length) = (*self.tagger).length {
+                length(self.tagger)
+            } else {
+                panic!("no callback for length")
+            }
+        }
+    }
+
+    fn viterbi(&mut self, labels: *mut c_int, ptr_score: *mut floatval_t) -> c_int {
+        unsafe {
+            if let Some(viterbi) = (*self.tagger).viterbi {
+                viterbi(self.tagger, labels, ptr_score)
+            } else {
+                panic!("no callback for viterbi")
+            }
+        }
+    }
+
+    fn score(&mut self, path: *mut c_int, ptr_score: *mut floatval_t) -> c_int {
+        unsafe {
+            if let Some(score) = (*self.tagger).score {
+                score(self.tagger, path, ptr_score)
+            } else {
+                panic!("no callback for score")
+            }
+        }
+    }
+
+    fn lognorm(&mut self, ptr_norm: *mut floatval_t) -> c_int {
+        unsafe {
+            if let Some(lognorm) = (*self.tagger).lognorm {
+                lognorm(self.tagger, ptr_norm)
+            } else {
+                panic!("no callback for lognorm")
+            }
+        }
+    }
+}
+
+impl Drop for TaggerWrapper {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(release) = (*self.tagger).release {
+                release(self.tagger);
+            } else {
+                panic!("no callback for release")
+            }
+        }
+    }
+}
+
+struct ModelWrapper {
+    model: *mut crfsuite_sys::crfsuite_model_t
+}
+
+impl ModelWrapper {
+    pub fn get_tagger(&mut self, ptr_tagger: *mut *mut crfsuite_sys::crfsuite_tagger_t) -> c_int {
+        unsafe {
+            if let Some(get_tagger) = (*self.model).get_tagger {
+                get_tagger(self.model, ptr_tagger)
+            } else {
+                panic!("no callback for get_tagger")
+            }
+        }
+    }
+
+    pub fn get_labels(&mut self, ptr_labels: *mut *mut crfsuite_sys::crfsuite_dictionary_t) -> c_int {
+        unsafe {
+            if let Some(get_labels) = (*self.model).get_labels {
+                get_labels(self.model, ptr_labels)
+            } else {
+                panic!("no callback for get_labels")
+            }
+        }
+    }
+
+    pub fn get_attrs(&mut self, ptr_attrs: *mut *mut crfsuite_sys::crfsuite_dictionary_t) -> c_int {
+        unsafe {
+            if let Some(get_attrs) = (*self.model).get_attrs {
+                get_attrs(self.model, ptr_attrs)
+            } else {
+                panic!("no callback for get_labels")
+            }
+        }
+    }
+}
+
+impl Drop for ModelWrapper {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(release) = (*self.model).release {
+                release(self.model);
+            }
+        }
     }
 }
 
@@ -521,5 +618,12 @@ mod tests {
 
         assert!(p2.is_finite());
         assert!(p2 - 9.73062095825e-06 < 1e-12)
+    }
+
+    #[test]
+    fn labels_work() {
+        let mut t = Tagger::create_from_file("test-data/modelo62R_B.crfsuite").unwrap();
+        let labels = t.labels().unwrap();
+        assert_eq!(labels, vec!["O", "B-snips/number", "I-snips/number"]);
     }
 }

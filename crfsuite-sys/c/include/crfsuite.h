@@ -267,6 +267,8 @@ typedef int (*crfsuite_logging_callback)(void *user, const char *format, va_list
 
 /**
  * CRFSuite model interface.
+ *
+ * <div rustbindgen nocopy></div>
  */
 struct tag_crfsuite_model {
     /**
@@ -389,6 +391,8 @@ struct tag_crfsuite_trainer {
 
 /**
  * CRFSuite tagger interface.
+ *
+ * <div rustbindgen nocopy></div>
  */
 struct tag_crfsuite_tagger {
     /**
@@ -491,6 +495,8 @@ struct tag_crfsuite_tagger {
 
 /**
  * CRFSuite dictionary interface.
+ *
+ * <div rustbindgen nocopy></div>
  */
 struct tag_crfsuite_dictionary {
     /**
