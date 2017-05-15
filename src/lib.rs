@@ -29,13 +29,36 @@ use errors::*;
 use crfsuite_sys::crfsuite_create_instance_from_file;
 
 #[derive(Debug)]
-pub struct Attribute {
+pub struct SimpleAttribute {
     pub attr: String,
     pub value: f64
 }
 
-type Item = Vec<Attribute>;
-type ItemSequence = Vec<Item>;
+pub trait Attribute {
+    fn get_attr(&self) -> Result<CString>;
+    fn get_value(&self) -> f64;
+}
+
+impl Attribute for SimpleAttribute {
+    fn get_attr(&self) -> Result<CString> {
+        Ok(CString::new(self.attr.as_bytes())?)
+    }
+
+    fn get_value(&self) -> f64 {
+        self.value
+    }
+}
+
+impl Attribute for (String, String) {
+    fn get_attr(&self) -> Result<CString> {
+        let &(ref key, ref value) = self;
+        Ok(CString::new(format!("{}:{}", key, value).as_bytes())?)
+    }
+
+    fn get_value(&self) -> f64 {
+        1.0
+    }
+}
 
 pub struct Tagger {
     model: ModelWrapper,
@@ -89,7 +112,6 @@ impl Tagger {
         let mut labels = DictionaryWrapper { dict: labels };
 
 
-
         let mut lseq = Vec::with_capacity(labels.num() as usize);
 
         for i in 0..labels.num() {
@@ -107,12 +129,12 @@ impl Tagger {
         Ok(lseq)
     }
 
-    pub fn tag(&mut self, input: ItemSequence) -> Result<Vec<String>> {
+    pub fn tag<A: Attribute>(&mut self, input: &[Vec<A>]) -> Result<Vec<String>> {
         &self.set(input)?;
         self.viterbi()
     }
 
-    pub fn set(&mut self, input: ItemSequence) -> Result<()> {
+    pub fn set<A: Attribute>(&mut self, input: &[Vec<A>]) -> Result<()> {
         let mut attrs = null_mut();
         let r = self.model.get_attrs(&mut attrs);
         if r != 0 {
@@ -136,13 +158,16 @@ impl Tagger {
             unsafe { crfsuite_sys::crfsuite_item_init(inst_item) };
 
             for i in 0..item.len() {
-                let aid = attrs.str_to_id(CString::new(item[i].attr.as_bytes())?.into_raw());
+                let raw_pointer = item[i].get_attr()?.into_raw();
+                let aid = attrs.str_to_id(raw_pointer);
 
                 if 0 <= aid {
                     let mut cont = &mut unsafe { zeroed() };
-                    unsafe { crfsuite_sys::crfsuite_attribute_set(cont, aid, item[i].value) };
+                    unsafe { crfsuite_sys::crfsuite_attribute_set(cont, aid, item[i].get_value()) };
                     unsafe { crfsuite_sys::crfsuite_item_append_attribute(inst_item, cont) };
                 }
+
+                let _ = unsafe { CString::from_raw(raw_pointer) }; // get back the string to free it
             }
         }
 
@@ -424,7 +449,7 @@ impl Drop for ModelWrapper {
 #[cfg(test)]
 mod tests {
     use super::Tagger;
-    use super::Attribute;
+    use super::SimpleAttribute;
 
     #[test]
     fn tagger_works() {
@@ -432,82 +457,82 @@ mod tests {
 
         let input = vec![
             vec![
-                Attribute { attr: "is_first:1".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1:Xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2:Xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1:set".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters:01010000000".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]:11110111111111".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]:to".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]:rare_word to".to_string(), value: 1.0 }
+                SimpleAttribute { attr: "is_first:1".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_1:Xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_2:Xxx xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1:set".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters:01010000000".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[+1]:11110111111111".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[+2]:to".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_2[+1]:rare_word to".to_string(), value: 1.0 }
             ],
             vec![
-                Attribute { attr: "word_cluster_brown_clusters[-1]:01010000000".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]:Xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_3[-1]:Xxx xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]:set".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters:11110111111111".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]:to".to_string(), value: 1.0 },
-                Attribute { attr: "is_first[-1]:1".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]:1010".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]:to rare_word".to_string(), value: 1.0 }
+                SimpleAttribute { attr: "word_cluster_brown_clusters[-1]:01010000000".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_2[-1]:Xxx xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_3[-1]:Xxx xxx xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[-1]:set".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters:11110111111111".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[+1]:to".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "is_first[-1]:1".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[+1]:1010".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_2[+1]:to rare_word".to_string(), value: 1.0 }
             ],
             vec![
-                Attribute { attr: "is_first[-2]:1".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-1]:11110111111111".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]:set".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-2]:01010000000".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "is_last[+2]:1".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[-2]:set rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_3[-1]:xxx xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1:to".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters:1010".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]:11111110100".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+2]:please".to_string(), value: 1.0 },
-                Attribute { attr: "is_digit[+1]:1".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_2[+1]:rare_word please".to_string(), value: 1.0 }
+                SimpleAttribute { attr: "is_first[-2]:1".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[-1]:11110111111111".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[-2]:set".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[-2]:01010000000".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "is_last[+2]:1".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_2[-2]:set rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_3[-1]:xxx xxx xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1:to".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters:1010".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[+1]:11111110100".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[+2]:please".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "is_digit[+1]:1".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_2[+1]:rare_word please".to_string(), value: 1.0 }
             ],
             vec![
-                Attribute { attr: "ngram_2[-2]:rare_word to".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-1]:1010".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[+1]:11101010110".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-2]:11110111111111".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
-                Attribute { attr: "is_digit:1".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]:to".to_string(), value: 1.0 },
-                Attribute { attr: "is_last[+1]:1".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters:11111110100".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[+1]:please".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
-                Attribute { attr: "built-in-snips/number:U-".to_string(), value: 1.0 }
+                SimpleAttribute { attr: "ngram_2[-2]:rare_word to".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[-1]:1010".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[+1]:11101010110".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[-2]:11110111111111".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "is_digit:1".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[-1]:to".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "is_last[+1]:1".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters:11111110100".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[+1]:please".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "built-in-snips/number:U-".to_string(), value: 1.0 }
             ],
             vec![
-                Attribute { attr: "ngram_2[-2]:to rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-1]:11111110100".to_string(), value: 1.0 },
-                Attribute { attr: "built-in-snips/number[-1]:U-".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters[-2]:1010".to_string(), value: 1.0 },
-                Attribute { attr: "is_digit[-1]:1".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
-                Attribute { attr: "is_last:1".to_string(), value: 1.0 },
-                Attribute { attr: "word_cluster_brown_clusters:11101010110".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1:please".to_string(), value: 1.0 },
-                Attribute { attr: "ngram_1[-2]:to".to_string(), value: 1.0 }
+                SimpleAttribute { attr: "ngram_2[-2]:to rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[-1]:11111110100".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "built-in-snips/number[-1]:U-".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters[-2]:1010".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "is_digit[-1]:1".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "is_last:1".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "word_cluster_brown_clusters:11101010110".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1:please".to_string(), value: 1.0 },
+                SimpleAttribute { attr: "ngram_1[-2]:to".to_string(), value: 1.0 }
             ]
         ];
 
-        let r = t.unwrap().tag(input);
+        let r = t.unwrap().tag(&input);
 
         assert_eq!(r.unwrap(), vec![
             "O",
@@ -519,95 +544,188 @@ mod tests {
     }
 
     #[test]
+    fn tagger_kv_works() {
+        let t = Tagger::create_from_file("test-data/modela78m0U.crfsuite");
+
+        let input = vec![
+            vec![
+                ("is_first".to_string(), "1".to_string()),
+                ("shape_ngram_1".to_string(), "Xxx".to_string()),
+                ("shape_ngram_2".to_string(), "Xxx xxx".to_string()),
+                ("ngram_1".to_string(), "set".to_string()),
+                ("word_cluster_brown_clusters".to_string(), "01010000000".to_string()),
+                ("ngram_1[+1]".to_string(), "rare_word".to_string()),
+                ("word_cluster_brown_clusters[+1]".to_string(), "11110111111111".to_string()),
+                ("ngram_1[+2]".to_string(), "to".to_string()),
+                ("ngram_2[+1]".to_string(), "rare_word to".to_string())
+            ],
+            vec![
+                ("word_cluster_brown_clusters[-1]".to_string(), "01010000000".to_string()),
+                ("shape_ngram_2".to_string(), "xxx xxx".to_string()),
+                ("shape_ngram_2[-1]".to_string(), "Xxx xxx".to_string()),
+                ("shape_ngram_1".to_string(), "xxx".to_string()),
+                ("shape_ngram_3[-1]".to_string(), "Xxx xxx xxx".to_string()),
+                ("ngram_1".to_string(), "rare_word".to_string()),
+                ("ngram_1[-1]".to_string(), "set".to_string()),
+                ("word_cluster_brown_clusters".to_string(), "11110111111111".to_string()),
+                ("ngram_1[+1]".to_string(), "to".to_string()),
+                ("is_first[-1]".to_string(), "1".to_string()),
+                ("word_cluster_brown_clusters[+1]".to_string(), "1010".to_string()),
+                ("ngram_1[+2]".to_string(), "rare_word".to_string()),
+                ("ngram_2[+1]".to_string(), "to rare_word".to_string())
+            ],
+            vec![
+                ("is_first[-2]".to_string(), "1".to_string()),
+                ("word_cluster_brown_clusters[-1]".to_string(), "11110111111111".to_string()),
+                ("ngram_1[-2]".to_string(), "set".to_string()),
+                ("word_cluster_brown_clusters[-2]".to_string(), "01010000000".to_string()),
+                ("shape_ngram_2[-1]".to_string(), "xxx xxx".to_string()),
+                ("is_last[+2]".to_string(), "1".to_string()),
+                ("ngram_2[-2]".to_string(), "set rare_word".to_string()),
+                ("shape_ngram_1".to_string(), "xxx".to_string()),
+                ("shape_ngram_2".to_string(), "xxx xxx".to_string()),
+                ("shape_ngram_3[-1]".to_string(), "xxx xxx xxx".to_string()),
+                ("ngram_1".to_string(), "to".to_string()),
+                ("ngram_1[-1]".to_string(), "rare_word".to_string()),
+                ("word_cluster_brown_clusters".to_string(), "1010".to_string()),
+                ("ngram_1[+1]".to_string(), "rare_word".to_string()),
+                ("word_cluster_brown_clusters[+1]".to_string(), "11111110100".to_string()),
+                ("ngram_1[+2]".to_string(), "please".to_string()),
+                ("is_digit[+1]".to_string(), "1".to_string()),
+                ("ngram_2[+1]".to_string(), "rare_word please".to_string())
+            ],
+            vec![
+                ("ngram_2[-2]".to_string(), "rare_word to".to_string()),
+                ("word_cluster_brown_clusters[-1]".to_string(), "1010".to_string()),
+                ("word_cluster_brown_clusters[+1]".to_string(), "11101010110".to_string()),
+                ("word_cluster_brown_clusters[-2]".to_string(), "11110111111111".to_string()),
+                ("shape_ngram_2[-1]".to_string(), "xxx xxx".to_string()),
+                ("is_digit".to_string(), "1".to_string()),
+                ("ngram_1".to_string(), "rare_word".to_string()),
+                ("ngram_1[-1]".to_string(), "to".to_string()),
+                ("is_last[+1]".to_string(), "1".to_string()),
+                ("word_cluster_brown_clusters".to_string(), "11111110100".to_string()),
+                ("ngram_1[+1]".to_string(), "please".to_string()),
+                ("ngram_1[-2]".to_string(), "rare_word".to_string()),
+                ("shape_ngram_1".to_string(), "xxx".to_string()),
+                ("built-in-snips/number".to_string(), "U-".to_string())
+            ],
+            vec![
+                ("ngram_2[-2]".to_string(), "to rare_word".to_string()),
+                ("word_cluster_brown_clusters[-1]".to_string(), "11111110100".to_string()),
+                ("built-in-snips/number[-1]".to_string(), "U-".to_string()),
+                ("word_cluster_brown_clusters[-2]".to_string(), "1010".to_string()),
+                ("is_digit[-1]".to_string(), "1".to_string()),
+                ("ngram_1[-1]".to_string(), "rare_word".to_string()),
+                ("is_last".to_string(), "1".to_string()),
+                ("word_cluster_brown_clusters".to_string(), "11101010110".to_string()),
+                ("ngram_1".to_string(), "please".to_string()),
+                ("ngram_1[-2]".to_string(), "to".to_string())
+            ]
+        ];
+
+        let r = t.unwrap().tag(&input);
+
+        assert_eq!(r.unwrap(), vec![
+            "O",
+            "O",
+            "O",
+            "B-target-en",
+            "O"
+        ]);
+    }
+
+
+    #[test]
     fn probability_works() {
         let mut t = Tagger::create_from_file("test-data/modelo62R_B.crfsuite").unwrap();
 
         let input = vec![
-            vec![Attribute { attr: "is_first:1".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_1:Xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_2:Xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "is_in_gazetteer_states_us[+1]:U-".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters:11110111110000".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[+1]:me".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[+1]:01010011100".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_2[+1]:me rare_word".to_string(), value: 1.0 }],
-            vec![Attribute { attr: "word_cluster_brown_clusters[-1]:11110111110000".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_2[-1]:Xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "is_in_gazetteer_states_us:U-".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_3[-1]:Xxx xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1:me".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters:01010011100".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "is_first[-1]:1".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[+1]:11111110101111".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_2[+1]:rare_word rare_word".to_string(), value: 1.0 }],
-            vec![Attribute { attr: "is_first[-2]:1".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[-1]:01010011100".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[+1]:11110011011100".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[-2]:11110111110000".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_2[-2]:rare_word me".to_string(), value: 1.0 },
-                 Attribute { attr: "built-in-snips/number:U-".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_3[-1]:xxx xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "is_in_gazetteer_states_us[-1]:U-".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[-1]:me".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters:11111110101111".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[+2]:of".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_2[+1]:rare_word of".to_string(), value: 1.0 }],
-            vec![Attribute { attr: "ngram_2[-2]:me rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[-1]:11111110101111".to_string(), value: 1.0 },
-                 Attribute { attr: "built-in-snips/number[-1]:U-".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[-2]:01010011100".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "is_last[+2]:1".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[+1]:10110".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_3[-1]:xxx xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "is_in_gazetteer_cities_world[+1]:U-".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters:11110011011100".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[+1]:of".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[-2]:me".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_2[+1]:of rare_word".to_string(), value: 1.0 }],
-            vec![Attribute { attr: "ngram_2[-2]:rare_word rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[-1]:11110011011100".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[+1]:1110010101".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[-2]:11111110101111".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
-                 Attribute { attr: "built-in-snips/number[-2]:U-".to_string(), value: 1.0 },
-                 Attribute { attr: "is_in_gazetteer_cities_world:U-".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1:of".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "is_last[+1]:1".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters:10110".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 }],
-            vec![Attribute { attr: "ngram_2[-2]:rare_word of".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[-1]:10110".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters[-2]:11110011011100".to_string(), value: 1.0 },
-                 Attribute { attr: "is_in_gazetteer_cities_world[-1]:U-".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[-1]:of".to_string(), value: 1.0 },
-                 Attribute { attr: "is_last:1".to_string(), value: 1.0 },
-                 Attribute { attr: "word_cluster_brown_clusters:1110010101".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
-                 Attribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 }]];
+            vec![SimpleAttribute { attr: "is_first:1".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_1:Xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_2:Xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_in_gazetteer_states_us[+1]:U-".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters:11110111110000".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[+1]:me".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[+1]:01010011100".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_2[+1]:me rare_word".to_string(), value: 1.0 }],
+            vec![SimpleAttribute { attr: "word_cluster_brown_clusters[-1]:11110111110000".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_2[-1]:Xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_in_gazetteer_states_us:U-".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_3[-1]:Xxx xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1:me".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters:01010011100".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_first[-1]:1".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[+1]:11111110101111".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_2[+1]:rare_word rare_word".to_string(), value: 1.0 }],
+            vec![SimpleAttribute { attr: "is_first[-2]:1".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[-1]:01010011100".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[+1]:11110011011100".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[-2]:11110111110000".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_2[-2]:rare_word me".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "built-in-snips/number:U-".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_3[-1]:xxx xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_in_gazetteer_states_us[-1]:U-".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[-1]:me".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters:11111110101111".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[+2]:of".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_2[+1]:rare_word of".to_string(), value: 1.0 }],
+            vec![SimpleAttribute { attr: "ngram_2[-2]:me rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[-1]:11111110101111".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "built-in-snips/number[-1]:U-".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[-2]:01010011100".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_last[+2]:1".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[+1]:10110".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_3[-1]:xxx xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_in_gazetteer_cities_world[+1]:U-".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_2:xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters:11110011011100".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[+1]:of".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[-2]:me".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[+2]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_2[+1]:of rare_word".to_string(), value: 1.0 }],
+            vec![SimpleAttribute { attr: "ngram_2[-2]:rare_word rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[-1]:11110011011100".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[+1]:1110010101".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[-2]:11111110101111".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_2[-1]:xxx xxx".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "built-in-snips/number[-2]:U-".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_in_gazetteer_cities_world:U-".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1:of".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[-1]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_last[+1]:1".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters:10110".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[+1]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "shape_ngram_1:xxx".to_string(), value: 1.0 }],
+            vec![SimpleAttribute { attr: "ngram_2[-2]:rare_word of".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[-1]:10110".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters[-2]:11110011011100".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_in_gazetteer_cities_world[-1]:U-".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[-1]:of".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "is_last:1".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "word_cluster_brown_clusters:1110010101".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1:rare_word".to_string(), value: 1.0 },
+                 SimpleAttribute { attr: "ngram_1[-2]:rare_word".to_string(), value: 1.0 }]];
 
-        t.set(input).unwrap();
+        t.set(&input).unwrap();
 
         let p1 = t.probability(vec!["O".to_string(), "O".to_string(), "B-snips/number".to_string(), "O".to_string(), "O".to_string(), "O".to_string()]).unwrap();
 
