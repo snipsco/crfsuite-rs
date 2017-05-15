@@ -27,6 +27,7 @@ mod errors {
 
 use errors::*;
 use crfsuite_sys::crfsuite_create_instance_from_file;
+use crfsuite_sys::crfsuite_create_instance_from_memory;
 
 #[derive(Debug)]
 pub struct SimpleAttribute {
@@ -67,13 +68,24 @@ pub struct Tagger {
 
 impl Tagger {
     pub fn create_from_file<P: AsRef<Path>>(path: P) -> Result<Tagger> {
-        let mut model = null_mut();
-
         let path_str = path.as_ref().to_str().ok_or("Path not convertible to str")?.as_bytes();
 
-        let r = unsafe {
-            crfsuite_create_instance_from_file(CString::new(path_str)?.into_raw(), &mut model)
-        };
+        Tagger::create(|model| Ok(unsafe {
+            crfsuite_create_instance_from_file(CString::new(path_str)?.into_raw(), model)
+        }))
+    }
+
+    pub fn create_from_memory(data: &[u8]) -> Result<Tagger> {
+        Tagger::create(|model| Ok(unsafe {
+            crfsuite_create_instance_from_memory(transmute(data.as_ptr()), data.len(), model)
+        }))
+    }
+
+    pub fn create<F>(creator: F) -> Result<Tagger>
+        where F: FnOnce(*mut *mut ::std::os::raw::c_void) -> Result<c_int> {
+        let mut model = null_mut();
+
+        let r = creator(&mut model)?;
 
         if r != 0 {
             bail!("error while creating instance : non zero C return code...")
@@ -95,10 +107,6 @@ impl Tagger {
             tagger: TaggerWrapper { tagger }
         })
     }
-
-    /*pub fn create_from_memory(data: &[u8]) -> Result<Tagger> {
-        unimplemented!();
-    }*/
 
     pub fn labels(&mut self) -> Result<Vec<String>> {
         let mut labels = null_mut();
@@ -450,6 +458,8 @@ impl Drop for ModelWrapper {
 mod tests {
     use super::Tagger;
     use super::SimpleAttribute;
+    use std::fs::File;
+    use std::io::Read;
 
     #[test]
     fn tagger_works() {
@@ -743,5 +753,30 @@ mod tests {
         let mut t = Tagger::create_from_file("test-data/modelo62R_B.crfsuite").unwrap();
         let labels = t.labels().unwrap();
         assert_eq!(labels, vec!["O", "B-snips/number", "I-snips/number"]);
+    }
+
+
+    #[test]
+    fn create_from_memory_work() {
+        fn create_tagger() -> Tagger {
+            // create the tagger in a separate scope than the one we'll use it in
+            let mut file = File::open("test-data/modelo62R_B.crfsuite").unwrap();
+            let mut bytes = Vec::with_capacity(file.metadata().unwrap().len() as usize);
+            file.read_to_end(&mut bytes).unwrap();
+            Tagger::create_from_memory(&bytes).unwrap()
+        }
+
+        let mut t = create_tagger();
+
+
+        let labels = t.labels().unwrap();
+        assert_eq!(labels, vec!["O", "B-snips/number", "I-snips/number"]);
+
+
+        let input = vec![vec![("is_first".to_string(), "1".to_string())]];
+
+        let r = t.tag(&input).unwrap();
+
+        assert_eq!(r, vec!["O"]);
     }
 }
