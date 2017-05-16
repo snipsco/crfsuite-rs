@@ -52,6 +52,8 @@ fn main() {
 
     let out_dir = env::var("OUT_DIR").unwrap();
     let _ = bindgen::builder()
+        .clang_arg("-target")
+        .clang_arg(env::var("TARGET").unwrap())
         .header("c/include/crfsuite.h")
         .no_unstable_rust()
         .generate().unwrap()

@@ -458,12 +458,14 @@ impl Drop for ModelWrapper {
 mod tests {
     use super::Tagger;
     use super::SimpleAttribute;
+    use std::env;
     use std::fs::File;
     use std::io::Read;
+    use std::path;
 
     #[test]
     fn tagger_works() {
-        let t = Tagger::create_from_file("test-data/modela78m0U.crfsuite");
+        let t = Tagger::create_from_file(file_path("modela78m0U.crfsuite"));
 
         let input = vec![
             vec![
@@ -555,7 +557,7 @@ mod tests {
 
     #[test]
     fn tagger_kv_works() {
-        let t = Tagger::create_from_file("test-data/modela78m0U.crfsuite");
+        let t = Tagger::create_from_file(file_path("modela78m0U.crfsuite"));
 
         let input = vec![
             vec![
@@ -648,7 +650,7 @@ mod tests {
 
     #[test]
     fn probability_works() {
-        let mut t = Tagger::create_from_file("test-data/modelo62R_B.crfsuite").unwrap();
+        let mut t = Tagger::create_from_file(file_path("modelo62R_B.crfsuite")).unwrap();
 
         let input = vec![
             vec![SimpleAttribute { attr: "is_first:1".to_string(), value: 1.0 },
@@ -750,7 +752,7 @@ mod tests {
 
     #[test]
     fn labels_work() {
-        let mut t = Tagger::create_from_file("test-data/modelo62R_B.crfsuite").unwrap();
+        let mut t = Tagger::create_from_file(file_path("modelo62R_B.crfsuite")).unwrap();
         let labels = t.labels().unwrap();
         assert_eq!(labels, vec!["O", "B-snips/number", "I-snips/number"]);
     }
@@ -760,7 +762,7 @@ mod tests {
     fn create_from_memory_work() {
         fn create_tagger() -> Tagger {
             // create the tagger in a separate scope than the one we'll use it in
-            let mut file = File::open("test-data/modelo62R_B.crfsuite").unwrap();
+            let mut file = File::open(file_path("modelo62R_B.crfsuite")).unwrap();
             let mut bytes = Vec::with_capacity(file.metadata().unwrap().len() as usize);
             file.read_to_end(&mut bytes).unwrap();
             Tagger::create_from_memory(&bytes).unwrap()
@@ -778,5 +780,13 @@ mod tests {
         let r = t.tag(&input).unwrap();
 
         assert_eq!(r, vec!["O"]);
+    }
+
+    pub fn file_path(file_name: &str) -> path::PathBuf {
+        if env::var("DINGHY").is_ok() {
+            env::current_exe().unwrap().parent().unwrap().join("src/test-data").join(file_name)
+        } else {
+            path::PathBuf::from("test-data").join(file_name)
+        }
     }
 }
