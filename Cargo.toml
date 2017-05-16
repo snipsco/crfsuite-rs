@@ -1,6 +1,6 @@
 [package]
 name = "crfsuite"
-version = "0.1.0-pre"
+version = "0.1.0"
 authors = ["Thibaut Lorrain <thibaut.lorrain@snips.ai>"]
 
 [dependencies]
