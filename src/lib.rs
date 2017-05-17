@@ -93,7 +93,7 @@ impl Tagger {
 
         let model: *mut crfsuite_sys::crfsuite_model_t = unsafe { transmute(model) };
 
-        let mut model = ModelWrapper { model };
+        let model = ModelWrapper { model };
 
         let mut tagger = null_mut();
 
@@ -108,7 +108,7 @@ impl Tagger {
         })
     }
 
-    pub fn labels(&mut self) -> Result<Vec<String>> {
+    pub fn labels(&self) -> Result<Vec<String>> {
         let mut labels = null_mut();
 
         let r = self.model.get_labels(&mut labels);
@@ -117,7 +117,7 @@ impl Tagger {
             bail!("failed to obtain the dictionary interface for labels")
         }
 
-        let mut labels = DictionaryWrapper { dict: labels };
+        let labels = DictionaryWrapper { dict: labels };
 
 
         let mut lseq = Vec::with_capacity(labels.num() as usize);
@@ -137,18 +137,18 @@ impl Tagger {
         Ok(lseq)
     }
 
-    pub fn tag<A: Attribute>(&mut self, input: &[Vec<A>]) -> Result<Vec<String>> {
+    pub fn tag<A: Attribute>(&self, input: &[Vec<A>]) -> Result<Vec<String>> {
         &self.set(input)?;
         self.viterbi()
     }
 
-    pub fn set<A: Attribute>(&mut self, input: &[Vec<A>]) -> Result<()> {
+    pub fn set<A: Attribute>(&self, input: &[Vec<A>]) -> Result<()> {
         let mut attrs = null_mut();
         let r = self.model.get_attrs(&mut attrs);
         if r != 0 {
             bail!("error while getting tagger : non zero C return code...")
         }
-        let mut attrs = DictionaryWrapper { dict: attrs };
+        let attrs = DictionaryWrapper { dict: attrs };
         let mut inst = unsafe { zeroed() };
 
         unsafe {
@@ -192,7 +192,7 @@ impl Tagger {
         Ok(())
     }
 
-    pub fn viterbi(&mut self) -> Result<Vec<String>> {
+    pub fn viterbi(&self) -> Result<Vec<String>> {
         let t: usize = self.tagger.length() as usize;
         if t <= 0 { return Ok(vec![]) }
 
@@ -204,7 +204,7 @@ impl Tagger {
             bail!("failed to obtain the dictionary interface for labels")
         }
 
-        let mut labels = DictionaryWrapper { dict: labels };
+        let labels = DictionaryWrapper { dict: labels };
 
         let mut score = f64::NAN;
         let mut path = vec![0; t];
@@ -230,7 +230,7 @@ impl Tagger {
         Ok(yseq)
     }
 
-    pub fn probability(&mut self, tags: Vec<String>) -> Result<f64> {
+    pub fn probability(&self, tags: Vec<String>) -> Result<f64> {
         let t: usize = self.tagger.length() as usize;
         if t <= 0 { return Ok(0.0) }
         if t != tags.len() {
@@ -245,7 +245,7 @@ impl Tagger {
             bail!("Failed to obtain the dictionary interface for labels")
         }
 
-        let mut labels = DictionaryWrapper { dict: labels };
+        let labels = DictionaryWrapper { dict: labels };
 
         let mut path = vec![0; t];
 
@@ -282,11 +282,12 @@ impl Tagger {
 }
 
 struct DictionaryWrapper {
+    // TODO : ensure thread safety
     dict: *mut crfsuite_sys::crfsuite_dictionary_t
 }
 
 impl DictionaryWrapper {
-    fn str_to_id(&mut self, str: *const c_char) -> c_int {
+    fn str_to_id(&self, str: *const c_char) -> c_int {
         unsafe {
             if let Some(to_id) = (*self.dict).to_id {
                 to_id(self.dict, str)
@@ -296,7 +297,7 @@ impl DictionaryWrapper {
         }
     }
 
-    fn id_to_string(&mut self, id: c_int, pstr: *mut *const c_char) -> c_int {
+    fn id_to_string(&self, id: c_int, pstr: *mut *const c_char) -> c_int {
         unsafe {
             if let Some(to_string) = (*self.dict).to_string {
                 to_string(self.dict, id, pstr)
@@ -306,7 +307,7 @@ impl DictionaryWrapper {
         }
     }
 
-    fn free(&mut self, str: *const c_char) {
+    fn free(&self, str: *const c_char) {
         unsafe {
             if let Some(free) = (*self.dict).free {
                 free(self.dict, str)
@@ -316,7 +317,7 @@ impl DictionaryWrapper {
         }
     }
 
-    fn num(&mut self) -> c_int {
+    fn num(&self) -> c_int {
         unsafe {
             if let Some(num) = (*self.dict).num {
                 num(self.dict)
@@ -340,11 +341,12 @@ impl Drop for DictionaryWrapper {
 }
 
 struct TaggerWrapper {
+    // TODO : ensure thread safety
     tagger: *mut crfsuite_sys::crfsuite_tagger_t
 }
 
 impl TaggerWrapper {
-    fn set(&mut self, inst: *mut crfsuite_sys::crfsuite_instance_t) -> c_int {
+    fn set(&self, inst: *mut crfsuite_sys::crfsuite_instance_t) -> c_int {
         unsafe {
             if let Some(set) = (*self.tagger).set {
                 set(self.tagger, inst)
@@ -354,7 +356,7 @@ impl TaggerWrapper {
         }
     }
 
-    fn length(&mut self) -> ::std::os::raw::c_int {
+    fn length(&self) -> ::std::os::raw::c_int {
         unsafe {
             if let Some(length) = (*self.tagger).length {
                 length(self.tagger)
@@ -364,7 +366,7 @@ impl TaggerWrapper {
         }
     }
 
-    fn viterbi(&mut self, labels: *mut c_int, ptr_score: *mut floatval_t) -> c_int {
+    fn viterbi(&self, labels: *mut c_int, ptr_score: *mut floatval_t) -> c_int {
         unsafe {
             if let Some(viterbi) = (*self.tagger).viterbi {
                 viterbi(self.tagger, labels, ptr_score)
@@ -374,7 +376,7 @@ impl TaggerWrapper {
         }
     }
 
-    fn score(&mut self, path: *mut c_int, ptr_score: *mut floatval_t) -> c_int {
+    fn score(&self, path: *mut c_int, ptr_score: *mut floatval_t) -> c_int {
         unsafe {
             if let Some(score) = (*self.tagger).score {
                 score(self.tagger, path, ptr_score)
@@ -384,7 +386,7 @@ impl TaggerWrapper {
         }
     }
 
-    fn lognorm(&mut self, ptr_norm: *mut floatval_t) -> c_int {
+    fn lognorm(&self, ptr_norm: *mut floatval_t) -> c_int {
         unsafe {
             if let Some(lognorm) = (*self.tagger).lognorm {
                 lognorm(self.tagger, ptr_norm)
@@ -408,11 +410,12 @@ impl Drop for TaggerWrapper {
 }
 
 struct ModelWrapper {
+    // TODO : ensure thread safety
     model: *mut crfsuite_sys::crfsuite_model_t
 }
 
 impl ModelWrapper {
-    pub fn get_tagger(&mut self, ptr_tagger: *mut *mut crfsuite_sys::crfsuite_tagger_t) -> c_int {
+    pub fn get_tagger(&self, ptr_tagger: *mut *mut crfsuite_sys::crfsuite_tagger_t) -> c_int {
         unsafe {
             if let Some(get_tagger) = (*self.model).get_tagger {
                 get_tagger(self.model, ptr_tagger)
@@ -422,7 +425,7 @@ impl ModelWrapper {
         }
     }
 
-    pub fn get_labels(&mut self, ptr_labels: *mut *mut crfsuite_sys::crfsuite_dictionary_t) -> c_int {
+    pub fn get_labels(&self, ptr_labels: *mut *mut crfsuite_sys::crfsuite_dictionary_t) -> c_int {
         unsafe {
             if let Some(get_labels) = (*self.model).get_labels {
                 get_labels(self.model, ptr_labels)
@@ -432,7 +435,7 @@ impl ModelWrapper {
         }
     }
 
-    pub fn get_attrs(&mut self, ptr_attrs: *mut *mut crfsuite_sys::crfsuite_dictionary_t) -> c_int {
+    pub fn get_attrs(&self, ptr_attrs: *mut *mut crfsuite_sys::crfsuite_dictionary_t) -> c_int {
         unsafe {
             if let Some(get_attrs) = (*self.model).get_attrs {
                 get_attrs(self.model, ptr_attrs)
@@ -650,7 +653,7 @@ mod tests {
 
     #[test]
     fn probability_works() {
-        let mut t = Tagger::create_from_file(file_path("modelo62R_B.crfsuite")).unwrap();
+        let t = Tagger::create_from_file(file_path("modelo62R_B.crfsuite")).unwrap();
 
         let input = vec![
             vec![SimpleAttribute { attr: "is_first:1".to_string(), value: 1.0 },
@@ -752,7 +755,7 @@ mod tests {
 
     #[test]
     fn labels_work() {
-        let mut t = Tagger::create_from_file(file_path("modelo62R_B.crfsuite")).unwrap();
+        let t = Tagger::create_from_file(file_path("modelo62R_B.crfsuite")).unwrap();
         let labels = t.labels().unwrap();
         assert_eq!(labels, vec!["O", "B-snips/number", "I-snips/number"]);
     }
@@ -768,7 +771,7 @@ mod tests {
             Tagger::create_from_memory(&bytes).unwrap()
         }
 
-        let mut t = create_tagger();
+        let t = create_tagger();
 
 
         let labels = t.labels().unwrap();
