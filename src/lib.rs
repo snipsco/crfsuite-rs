@@ -25,6 +25,8 @@ mod errors {
     }
 }
 
+pub use errors::Error;
+
 use errors::*;
 use crfsuite_sys::crfsuite_create_instance_from_file;
 use crfsuite_sys::crfsuite_create_instance_from_memory;
