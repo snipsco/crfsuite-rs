@@ -284,9 +284,11 @@ impl Tagger {
 }
 
 struct DictionaryWrapper {
-    // TODO : ensure thread safety
     dict: *mut crfsuite_sys::crfsuite_dictionary_t
 }
+
+// see https://github.com/chokkan/crfsuite/issues/35 send should pose any problems
+unsafe impl Send for DictionaryWrapper {}
 
 impl DictionaryWrapper {
     fn str_to_id(&self, str: *const c_char) -> c_int {
@@ -346,6 +348,10 @@ struct TaggerWrapper {
     // TODO : ensure thread safety
     tagger: *mut crfsuite_sys::crfsuite_tagger_t
 }
+
+// see https://github.com/chokkan/crfsuite/issues/35 send should pose any problems
+unsafe impl Send for TaggerWrapper {}
+
 
 impl TaggerWrapper {
     fn set(&self, inst: *mut crfsuite_sys::crfsuite_instance_t) -> c_int {
@@ -412,9 +418,11 @@ impl Drop for TaggerWrapper {
 }
 
 struct ModelWrapper {
-    // TODO : ensure thread safety
     model: *mut crfsuite_sys::crfsuite_model_t
 }
+
+// see https://github.com/chokkan/crfsuite/issues/35 send should pose any problems
+unsafe impl Send for ModelWrapper {}
 
 impl ModelWrapper {
     pub fn get_tagger(&self, ptr_tagger: *mut *mut crfsuite_sys::crfsuite_tagger_t) -> c_int {
