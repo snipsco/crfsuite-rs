@@ -53,7 +53,11 @@ node('jenkins-slave-generic') {
             node('jenkins-slave-rust2') {
                 env.PATH = "/usr/local/bin:${env.HOME}/.cargo/bin:${env.PATH}"
 
-                def cc_conf = "TARGET_CC=/opt/pitools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf/bin/arm-linux-gnueabihf-gcc"
+                def toolchain = "/opt/pitools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf"
+                def cc_conf = "TARGET_CC=${toolchain}/bin/arm-linux-gnueabihf-gcc " +
+                    "TARGET_SYSROOT=${toolchain}/arm-linux-gnueabihf/sysroot " +
+                    "CPATH=${toolchain}/lib/gcc/arm-linux-gnueabihf/4.9.3/include:${toolchain}/lib/gcc/arm-linux-gnueabihf/4.9.3/include-fixed"
+
 
                 stage('Bootstrap rpi') {
                     sh "rustup update"

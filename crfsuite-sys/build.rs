@@ -49,13 +49,28 @@ fn main() {
         .file("c/crf/crfsuite.c")
         .compile("libcrfsuite.a");
 
-
     let out_dir = env::var("OUT_DIR").unwrap();
-    let _ = bindgen::builder()
-        .clang_arg("-target")
-        .clang_arg(env::var("TARGET").unwrap())
+
+    let target = env::var("TARGET").unwrap();
+    let host = env::var("HOST").unwrap();
+
+    let mut builder = bindgen::builder();
+
+    if target != host {
+        if let Ok(sysroot) = env::var("TARGET_SYSROOT") {
+            builder = builder
+                .clang_arg(format!("--target={}", target))
+                .clang_arg(format!("--sysroot={}", sysroot));
+            // ProTip : if some include are missing from your sysroot, (for example GCC include like
+            // stddef.h) you can add them to the clang search path by using the CPATH env var
+        } else {
+            panic!("Cross compiling detected, please provide a sysroot in TARGET_SYSROOT env var")
+        }
+    }
+
+    let _ = builder.clang_arg("-v")
         .header("c/include/crfsuite.h")
         .no_unstable_rust()
         .generate().unwrap()
-        .write_to_file(Path::new(&out_dir).join("crfsuite.rs"));
+        .write_to_file(Path::new(&out_dir).join("crfsuite.rs")).unwrap();
 }
