@@ -7,6 +7,8 @@ extern crate crfsuite_sys;
 
 use std::f64;
 use std::ffi::{CStr, CString};
+use std::fs::File;
+use std::io::Read;
 use std::mem::transmute;
 use std::mem::zeroed;
 use std::path::Path;
@@ -19,6 +21,7 @@ use crfsuite_sys::floatval_t;
 mod errors {
     error_chain! {
         foreign_links {
+            Io(::std::io::Error);
             FfiNull(::std::ffi::NulError);
             Utf8(::std::str::Utf8Error);
         }
@@ -28,7 +31,6 @@ mod errors {
 pub use errors::Error;
 
 use errors::*;
-use crfsuite_sys::crfsuite_create_instance_from_file;
 use crfsuite_sys::crfsuite_create_instance_from_memory;
 
 #[derive(Debug)]
@@ -64,30 +66,29 @@ impl Attribute for (String, String) {
 }
 
 pub struct Tagger {
+    #[allow(unused)]
+    // we own the bytes here that is used in the C code
+    bytes: Vec<u8>,
     model: ModelWrapper,
     tagger: TaggerWrapper
 }
 
 impl Tagger {
     pub fn create_from_file<P: AsRef<Path>>(path: P) -> Result<Tagger> {
-        let path_str = path.as_ref().to_str().ok_or("Path not convertible to str")?.as_bytes();
+        let mut file = File::open(path)?;
+        let mut bytes = Vec::with_capacity(file.metadata()?.len() as usize);
+        file.read_to_end(&mut bytes)?;
 
-        Tagger::create(|model| Ok(unsafe {
-            crfsuite_create_instance_from_file(CString::new(path_str)?.into_raw(), model)
-        }))
+        Tagger::create_from_memory(bytes)
     }
 
-    pub fn create_from_memory(data: &[u8]) -> Result<Tagger> {
-        Tagger::create(|model| Ok(unsafe {
-            crfsuite_create_instance_from_memory(transmute(data.as_ptr()), data.len(), model)
-        }))
-    }
-
-    pub fn create<F>(creator: F) -> Result<Tagger>
-        where F: FnOnce(*mut *mut ::std::os::raw::c_void) -> Result<c_int> {
+    pub fn create_from_memory(data: Vec<u8>) -> Result<Tagger> {
         let mut model = null_mut();
 
-        let r = creator(&mut model)?;
+        let r = unsafe {
+            let x: &[u8] = data.as_ref();
+            crfsuite_create_instance_from_memory(transmute(x.as_ptr()), data.len(), &mut model)
+        };
 
         if r != 0 {
             bail!("error while creating instance : non zero C return code...")
@@ -106,7 +107,8 @@ impl Tagger {
 
         Ok(Tagger {
             model: model,
-            tagger: TaggerWrapper { tagger }
+            tagger: TaggerWrapper { tagger },
+            bytes: data
         })
     }
 
@@ -778,11 +780,10 @@ mod tests {
             let mut file = File::open(file_path("modelo62R_B.crfsuite")).unwrap();
             let mut bytes = Vec::with_capacity(file.metadata().unwrap().len() as usize);
             file.read_to_end(&mut bytes).unwrap();
-            Tagger::create_from_memory(&bytes).unwrap()
+            Tagger::create_from_memory(bytes).unwrap()
         }
 
         let t = create_tagger();
-
 
         let labels = t.labels().unwrap();
         assert_eq!(labels, vec!["O", "B-snips/number", "I-snips/number"]);
