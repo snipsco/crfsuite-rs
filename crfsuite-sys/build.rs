@@ -4,6 +4,8 @@ extern crate bindgen;
 
 use std::env;
 use std::path::Path;
+use std::io::{BufRead, Write};
+use std::fs::File;
 
 fn main() {
     gcc::Config::new()
@@ -67,10 +69,29 @@ fn main() {
             panic!("Cross compiling detected, please provide a sysroot in TARGET_SYSROOT env var")
         }
     }
+    let p = Path::new(&out_dir).join("crfsuite_orig.rs");
+
 
     let _ = builder.clang_arg("-v")
         .header("c/include/crfsuite.h")
         .no_unstable_rust()
         .generate().unwrap()
-        .write_to_file(Path::new(&out_dir).join("crfsuite.rs")).unwrap();
+        .write_to_file(&p);
+
+    let file = File::open(p).unwrap();
+
+    // bindgen generate a compile error when building for android...
+    let patched = std::io::BufReader::new(file)
+        .lines().filter_map(|l| if let Ok(l) = l {
+        if l != "pub type __va_list = __builtin_va_list;" {
+            Some(l)
+        } else { None }
+    } else { None }).collect::<Vec<String>>();
+
+    let mut patched_file = File::create(Path::new(&out_dir).join("crfsuite.rs")).unwrap();
+
+    for line in patched {
+        writeln!(patched_file, "{}", line).unwrap();
+    }
+
 }

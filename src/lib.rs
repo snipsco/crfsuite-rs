@@ -798,7 +798,7 @@ mod tests {
 
     pub fn file_path(file_name: &str) -> path::PathBuf {
         if env::var("DINGHY").is_ok() {
-            env::current_exe().unwrap().parent().unwrap().join("src/test-data").join(file_name)
+            env::current_exe().unwrap().parent().unwrap().join("test_data/data").join(file_name)
         } else {
             path::PathBuf::from("test-data").join(file_name)
         }

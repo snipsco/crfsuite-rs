@@ -40,6 +40,26 @@
 #include <emmintrin.h>
 #endif/*USE_SSE*/
 
+#if defined(__ANDROID__)
+#include <errno.h>
+#include <malloc.h>
+
+__attribute__((visibility("default"))) int posix_memalign(void** res,
+                                                          size_t alignment,
+                                                          size_t size) {
+  // posix_memalign is supposed to check the arguments. See tc_posix_memalign()
+  // in tc_malloc.cc.
+  if (((alignment % sizeof(void*)) != 0) ||
+      ((alignment & (alignment - 1)) != 0) || (alignment == 0)) {
+    return EINVAL;
+  }
+  void* ptr = memalign(alignment, size);
+  *res = ptr;
+  return ptr ? 0 : ENOMEM;
+
+}
+#endif
+
 #if defined(_MSC_VER) || defined(__MINGW32__) || defined(__MINGW64__)
 #include <malloc.h>
 #else
