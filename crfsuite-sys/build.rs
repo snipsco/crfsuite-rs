@@ -63,6 +63,17 @@ fn main() {
             builder = builder
                 .clang_arg(format!("--target={}", target))
                 .clang_arg(format!("--sysroot={}", sysroot));
+
+            if target.contains("apple") && target.contains("aarch64") {
+                // The official Apple tools use "-arch arm64" instead of specifying
+                // -target directly; -arch only works when the default target is
+                // Darwin-based to put Clang into "Apple mode" as it were. But it does
+                // sort of explain why arm64 works better than aarch64, which is the
+                // preferred name everywhere else.
+                builder = builder
+                    .clang_arg(format!("-arch"))
+                    .clang_arg(format!("arm64"));
+            }
             // ProTip : if some include are missing from your sysroot, (for example GCC include like
             // stddef.h) you can add them to the clang search path by using the CPATH env var
         } else {
