@@ -82,7 +82,6 @@ fn main() {
     }
     let p = Path::new(&out_dir).join("crfsuite_orig.rs");
 
-
     let _ = builder.clang_arg("-v")
         .header("c/include/crfsuite.h")
         .no_unstable_rust()
@@ -91,12 +90,18 @@ fn main() {
 
     let file = File::open(p).unwrap();
 
-    // bindgen generate a compile error when building for android...
+    // bindgen generate a compile error when building for arm android...
     let patched = std::io::BufReader::new(file)
         .lines().filter_map(|l| if let Ok(l) = l {
         if l != "pub type __va_list = __builtin_va_list;" {
             Some(l)
-        } else { None }
+        } else {
+            if target == "armv7-linux-androideabi"
+                || target == "arm-linux-androideabi"
+                || target == "aarch64-linux-android" {
+                None
+            } else { Some(l) }
+        }
     } else { None }).collect::<Vec<String>>();
 
     let mut patched_file = File::create(Path::new(&out_dir).join("crfsuite.rs")).unwrap();
@@ -104,5 +109,4 @@ fn main() {
     for line in patched {
         writeln!(patched_file, "{}", line).unwrap();
     }
-
 }
