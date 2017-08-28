@@ -84,7 +84,6 @@ fn main() {
 
     let _ = builder.clang_arg("-v")
         .header("c/include/crfsuite.h")
-        .no_unstable_rust()
         .generate().unwrap()
         .write_to_file(&p);
 
