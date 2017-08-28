@@ -5,7 +5,7 @@ def branchName = "${env.BRANCH_NAME}"
 node('jenkins-slave-generic') {
     stage('build') {
         builders['linux-x86_64'] = {
-            node('jenkins-slave-rust2') {
+            node('jenkins-slave-ec2') {
                 env.PATH = "/usr/local/bin:${env.HOME}/.cargo/bin:${env.PATH}"
 
                 stage('Bootstrap linux') {
@@ -50,7 +50,7 @@ node('jenkins-slave-generic') {
             }
         }
         builders['rpi-x-compile'] = {
-            node('jenkins-slave-rust2') {
+            node('jenkins-slave-ec2') {
                 env.PATH = "/usr/local/bin:${env.HOME}/.cargo/bin:${env.PATH}"
 
                 def toolchain = "/opt/pitools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf"
