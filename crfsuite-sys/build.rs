@@ -8,7 +8,7 @@ use std::io::{BufRead, Write};
 use std::fs::File;
 
 fn main() {
-    gcc::Config::new()
+    gcc::Build::new()
         .include("c/include")
         //.define("USE_SSE", "1") // TODO check if target supports SSE and enable if so
 
