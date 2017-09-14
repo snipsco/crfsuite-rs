@@ -289,7 +289,7 @@ struct DictionaryWrapper {
     dict: *mut crfsuite_sys::crfsuite_dictionary_t
 }
 
-// see https://github.com/chokkan/crfsuite/issues/35 send should pose any problems
+// see https://github.com/chokkan/crfsuite/issues/35 send should not pose any problems
 unsafe impl Send for DictionaryWrapper {}
 
 impl DictionaryWrapper {
@@ -351,7 +351,7 @@ struct TaggerWrapper {
     tagger: *mut crfsuite_sys::crfsuite_tagger_t
 }
 
-// see https://github.com/chokkan/crfsuite/issues/35 send should pose any problems
+// see https://github.com/chokkan/crfsuite/issues/35 send should not pose any problems
 unsafe impl Send for TaggerWrapper {}
 
 
@@ -423,7 +423,7 @@ struct ModelWrapper {
     model: *mut crfsuite_sys::crfsuite_model_t
 }
 
-// see https://github.com/chokkan/crfsuite/issues/35 send should pose any problems
+// see https://github.com/chokkan/crfsuite/issues/35 send should not pose any problems
 unsafe impl Send for ModelWrapper {}
 
 impl ModelWrapper {
