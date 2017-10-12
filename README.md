@@ -21,4 +21,4 @@ $ cargo test
 
 ## Supported platforms
 
-Was tested on  various x86_64 linux distros, RaspberryPi, macOs, iOs and Android
+Was tested on various x86_64 linux distros, RaspberryPi, macOS, iOS and Android
