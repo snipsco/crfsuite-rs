@@ -4,7 +4,7 @@ version = "0.2.0-pre"
 authors = ["Thibaut Lorrain <thibaut.lorrain@snips.ai>"]
 
 [dependencies]
-error-chain = { version = "0.10", default-features=false }
+error-chain = { version = "0.11", default-features=false }
 libc = "0.2"
 crfsuite-sys = { path = "crfsuite-sys" }
 
