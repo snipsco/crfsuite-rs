@@ -82,10 +82,11 @@ fn main() {
     }
     let p = Path::new(&out_dir).join("crfsuite_orig.rs");
 
-    let _ = builder.clang_arg("-v")
+    builder.clang_arg("-v")
         .header("c/include/crfsuite.h")
         .generate().unwrap()
-        .write_to_file(&p);
+        .write_to_file(&p)
+        .expect("Couldn't write bindings!");
 
     let file = File::open(p).unwrap();
 
