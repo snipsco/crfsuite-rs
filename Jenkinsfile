@@ -49,6 +49,7 @@ node('jenkins-slave-generic') {
                 }
             }
         }
+
         builders['rpi-x-compile'] = {
             node('jenkins-slave-ec2') {
                 env.PATH = "/usr/local/bin:${env.HOME}/.cargo/bin:${env.PATH}"
@@ -57,7 +58,6 @@ node('jenkins-slave-generic') {
                 def cc_conf = "TARGET_CC=${toolchain}/bin/arm-linux-gnueabihf-gcc " +
                     "TARGET_SYSROOT=${toolchain}/arm-linux-gnueabihf/sysroot " +
                     "CPATH=${toolchain}/lib/gcc/arm-linux-gnueabihf/4.9.3/include:${toolchain}/lib/gcc/arm-linux-gnueabihf/4.9.3/include-fixed"
-
 
                 stage('Bootstrap rpi') {
                     sh "rustup update"
@@ -78,8 +78,32 @@ node('jenkins-slave-generic') {
             }
         }
 
+        builders['android-arm'] = {
+            node('jenkins-slave-ec2') {
+                env.PATH = "/usr/local/bin:${env.HOME}/.cargo/bin:${env.PATH}"
+
+                def toolchain = "/opt/android-toolchains/arm"
+                def cc_conf = "TARGET_CC=${toolchain}/bin/arm-linux-androideabi-gcc " +
+                              "TARGET_AR=${toolchain}/bin/arm-linux-androideabi-ar " +
+                              "TARGET_SYSROOT=${toolchain}/sysroot " +
+                              "CPATH=${toolchain}/lib/gcc/arm-linux-androideabi/4.9.x/include:" +
+                                    "${toolchain}/lib/gcc/arm-linux-androideabi/4.9.x/include-fixed"
+
+                stage('Bootstrap android') {
+                    sh "rustup update"
+                }
+
+                stage('Checkout android') {
+                    deleteDir()
+                    checkout scm
+                }
+
+                stage('Build android') {
+                    sh "${cc_conf} cargo build --target armv7-linux-androideabi"
+                }
+            }
+        }
+
         parallel builders
-
     }
-
 }

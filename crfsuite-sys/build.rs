@@ -4,7 +4,7 @@ extern crate bindgen;
 
 use std::env;
 use std::path::Path;
-use std::io::{BufRead, Write};
+use std::io::{Write, Read};
 use std::fs::File;
 
 fn main() {
@@ -88,25 +88,20 @@ fn main() {
         .write_to_file(&p)
         .expect("Couldn't write bindings!");
 
-    let file = File::open(p).unwrap();
+    let mut file = File::open(p).unwrap();
 
     // bindgen generate a compile error when building for arm android...
-    let patched = std::io::BufReader::new(file)
-        .lines().filter_map(|l| if let Ok(l) = l {
-        if l != "pub type __va_list = __builtin_va_list;" {
-            Some(l)
-        } else {
-            if target == "armv7-linux-androideabi"
-                || target == "arm-linux-androideabi"
-                || target == "aarch64-linux-android" {
-                None
-            } else { Some(l) }
-        }
-    } else { None }).collect::<Vec<String>>();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).expect("unable to read file");
+    let contents = if target == "armv7-linux-androideabi" || target == "arm-linux-androideabi" || target == "aarch64-linux-android" {
+        contents
+            // the generated code will have a space or not depending if rustfmt in installed...
+            .replace("pub type __va_list = __builtin_va_list;", "")
+            .replace("pub type __va_list = __builtin_va_list ;", "")
+    } else {
+        contents
+    };
 
-    let mut patched_file = File::create(Path::new(&out_dir).join("crfsuite.rs")).unwrap();
-
-    for line in patched {
-        writeln!(patched_file, "{}", line).unwrap();
-    }
+    let mut patched_file = File::create(Path::new(&out_dir).join("crfsuite.rs")).expect("couln't create crfsuite.rs");
+    patched_file.write_all(contents.as_bytes()).expect("couldn't wrote to patched crfsuite.rs");
 }
