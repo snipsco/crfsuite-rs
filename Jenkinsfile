@@ -85,7 +85,7 @@ node('jenkins-slave-generic') {
                 def toolchain = "/opt/android-toolchains/arm"
                 def cc_conf = "TARGET_CC=${toolchain}/bin/arm-linux-androideabi-gcc " +
                               "TARGET_AR=${toolchain}/bin/arm-linux-androideabi-ar " +
-                              "TARGET_SYSROOT=${toolchain}/arm-linux-androideabi/sysroot " +
+                              "TARGET_SYSROOT=${toolchain}/sysroot " +
                               "CPATH=${toolchain}/lib/gcc/arm-linux-androideabi/4.9.x/include:" +
                                     "${toolchain}/lib/gcc/arm-linux-androideabi/4.9.x/include-fixed"
 
