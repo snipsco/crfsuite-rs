@@ -94,7 +94,10 @@ fn main() {
     let mut contents = String::new();
     file.read_to_string(&mut contents).expect("unable to read file");
     let contents = if target == "armv7-linux-androideabi" || target == "arm-linux-androideabi" || target == "aarch64-linux-android" {
-        contents.replace("pub type __va_list = __builtin_va_list", "")
+        contents
+            // the generated code will have a space or not depending if rustfmt in installed...
+            .replace("pub type __va_list = __builtin_va_list;", "")
+            .replace("pub type __va_list = __builtin_va_list ;", "")
     } else {
         contents
     };
