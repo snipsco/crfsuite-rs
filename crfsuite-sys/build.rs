@@ -64,6 +64,19 @@ fn main() {
                 .clang_arg(format!("--target={}", target))
                 .clang_arg(format!("--sysroot={}", sysroot));
 
+            // Add a path to the private headers for the target compiler. Borderline,
+            // as we are likely using a gcc header with clang frontend.
+            let target_compiler = gcc::Build::new().get_compiler();
+            let target_compiler_include = target_compiler.to_command()
+                .arg("--print-file-name=include").output();
+            if let Ok(output) = target_compiler_include {
+                if output.status.success() {
+                    let path = String::from_utf8(output.stdout)
+                        .expect("toolchain path shoud be utf8 friendly");
+                    builder = builder.clang_arg(format!("-I{}", path.trim()));
+                }
+            }
+
             if target.contains("apple") && target.contains("aarch64") {
                 // The official Apple tools use "-arch arm64" instead of specifying
                 // -target directly; -arch only works when the default target is

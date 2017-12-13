@@ -56,8 +56,7 @@ node('jenkins-slave-generic') {
 
                 def toolchain = "/opt/pitools/arm-bcm2708/arm-rpi-4.9.3-linux-gnueabihf"
                 def cc_conf = "TARGET_CC=${toolchain}/bin/arm-linux-gnueabihf-gcc " +
-                    "TARGET_SYSROOT=${toolchain}/arm-linux-gnueabihf/sysroot " +
-                    "CPATH=${toolchain}/lib/gcc/arm-linux-gnueabihf/4.9.3/include:${toolchain}/lib/gcc/arm-linux-gnueabihf/4.9.3/include-fixed"
+                    "TARGET_SYSROOT=${toolchain}/arm-linux-gnueabihf/sysroot "
 
                 stage('Bootstrap rpi') {
                     sh "rustup update"
@@ -85,9 +84,7 @@ node('jenkins-slave-generic') {
                 def toolchain = "/opt/android-toolchains/arm"
                 def cc_conf = "TARGET_CC=${toolchain}/bin/arm-linux-androideabi-gcc " +
                               "TARGET_AR=${toolchain}/bin/arm-linux-androideabi-ar " +
-                              "TARGET_SYSROOT=${toolchain}/sysroot " +
-                              "CPATH=${toolchain}/lib/gcc/arm-linux-androideabi/4.9.x/include:" +
-                                    "${toolchain}/lib/gcc/arm-linux-androideabi/4.9.x/include-fixed"
+                              "TARGET_SYSROOT=${toolchain}/sysroot "
 
                 stage('Bootstrap android') {
                     sh "rustup update"
