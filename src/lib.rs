@@ -1,8 +1,6 @@
 #[macro_use]
-extern crate error_chain;
-
+extern crate failure;
 extern crate libc;
-
 extern crate crfsuite_sys;
 
 use std::f64;
@@ -17,21 +15,9 @@ use std::os::raw::{c_char, c_int};
 use std::slice;
 
 use crfsuite_sys::floatval_t;
-
-mod errors {
-    error_chain! {
-        foreign_links {
-            Io(::std::io::Error);
-            FfiNull(::std::ffi::NulError);
-            Utf8(::std::str::Utf8Error);
-        }
-    }
-}
-
-pub use errors::Error;
-
-use errors::*;
 use crfsuite_sys::crfsuite_create_instance_from_memory;
+
+type Result<T> = ::std::result::Result<T, ::failure::Error>;
 
 #[derive(Debug)]
 pub struct SimpleAttribute {
