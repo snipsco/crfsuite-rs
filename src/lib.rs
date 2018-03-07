@@ -145,7 +145,7 @@ impl Tagger {
             crfsuite_sys::crfsuite_instance_init_n(&mut inst, input.len() as libc::c_int);
         }
 
-        let mut inst_items = unsafe {
+        let inst_items = unsafe {
             slice::from_raw_parts_mut(inst.items, inst.num_items as usize)
         };
 
