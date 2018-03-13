@@ -5,8 +5,9 @@ authors = ["Thibaut Lorrain <thibaut.lorrain@snips.ai>"]
 build = "build.rs"
 
 [build-dependencies]
-gcc = "0.3"
-bindgen = "0.33"
+bindgen = "^0.33"
+cc = "1"
+dinghy-build = { version = "0.3", features = [ "with-bindgen" ] }
 
 [dependencies]
 libc = "0.2"
