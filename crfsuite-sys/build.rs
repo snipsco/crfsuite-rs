@@ -1,6 +1,6 @@
-extern crate gcc;
-
 extern crate bindgen;
+extern crate cc;
+extern crate dinghy_build;
 
 use std::env;
 use std::path::Path;
@@ -8,7 +8,7 @@ use std::io::{Write, Read};
 use std::fs::File;
 
 fn main() {
-    gcc::Build::new()
+    cc::Build::new()
         .include("c/include")
         //.define("USE_SSE", "1") // TODO check if target supports SSE and enable if so
 
@@ -54,48 +54,11 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
 
     let target = env::var("TARGET").unwrap();
-    let host = env::var("HOST").unwrap();
 
-    let mut builder = bindgen::builder();
-
-    if target != host {
-        if let Ok(sysroot) = env::var("TARGET_SYSROOT") {
-            builder = builder
-                .clang_arg(format!("--target={}", target))
-                .clang_arg(format!("--sysroot={}", sysroot));
-
-            // Add a path to the private headers for the target compiler. Borderline,
-            // as we are likely using a gcc header with clang frontend.
-            let target_compiler = gcc::Build::new().get_compiler();
-            let target_compiler_include = target_compiler.to_command()
-                .arg("--print-file-name=include").output();
-            if let Ok(output) = target_compiler_include {
-                if output.status.success() {
-                    let path = String::from_utf8(output.stdout)
-                        .expect("toolchain path shoud be utf8 friendly");
-                    builder = builder.clang_arg(format!("-I{}", path.trim()));
-                }
-            }
-
-            if target.contains("apple") && target.contains("aarch64") {
-                // The official Apple tools use "-arch arm64" instead of specifying
-                // -target directly; -arch only works when the default target is
-                // Darwin-based to put Clang into "Apple mode" as it were. But it does
-                // sort of explain why arm64 works better than aarch64, which is the
-                // preferred name everywhere else.
-                builder = builder
-                    .clang_arg(format!("-arch"))
-                    .clang_arg(format!("arm64"));
-            }
-            // ProTip : if some include are missing from your sysroot, (for example GCC include like
-            // stddef.h) you can add them to the clang search path by using the CPATH env var
-        } else {
-            panic!("Cross compiling detected, please provide a sysroot in TARGET_SYSROOT env var")
-        }
-    }
     let p = Path::new(&out_dir).join("crfsuite_orig.rs");
-
-    builder.clang_arg("-v")
+    dinghy_build::new_bindgen_with_cross_compilation_support()
+        .unwrap()
+        .clang_arg("-v")
         .header("c/include/crfsuite.h")
         .generate().unwrap()
         .write_to_file(&p)
