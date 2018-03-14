@@ -1,5 +1,5 @@
 extern crate bindgen;
-extern crate cc;
+extern crate gcc;
 extern crate dinghy_build;
 
 use std::env;
@@ -8,7 +8,7 @@ use std::io::{Write, Read};
 use std::fs::File;
 
 fn main() {
-    cc::Build::new()
+    gcc::Build::new()
         .include("c/include")
         //.define("USE_SSE", "1") // TODO check if target supports SSE and enable if so
 
