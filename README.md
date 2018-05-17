@@ -1,4 +1,6 @@
 # crfsuite-rs
+[![Build Status](https://travis-ci.org/snipsco/crfsuite-rs.svg?branch=master)](https://travis-ci.org/snipsco/crfsuite-rs)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/snipsco/crfsuite-rs?branch=master&svg=true)](https://ci.appveyor.com/project/snipsco/crfsuite-rs)
 
 Rust bindings for CRFSuite
 
