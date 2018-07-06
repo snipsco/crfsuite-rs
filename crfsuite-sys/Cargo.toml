@@ -3,6 +3,7 @@ name = "crfsuite-sys"
 version = "0.2.0-pre"
 authors = ["Thibaut Lorrain <thibaut.lorrain@snips.ai>"]
 build = "build.rs"
+links = "crfsuite"
 
 [build-dependencies]
 gcc = "0.3"
