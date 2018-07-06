@@ -1,4 +1,3 @@
-extern crate bindgen;
 extern crate gcc;
 extern crate dinghy_build;
 
