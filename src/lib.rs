@@ -7,7 +7,6 @@ use std::f64;
 use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::io::Read;
-use std::mem::transmute;
 use std::mem::zeroed;
 use std::path::Path;
 use std::ptr::{null, null_mut};
@@ -17,7 +16,7 @@ use std::slice;
 use crfsuite_sys::floatval_t;
 use crfsuite_sys::crfsuite_create_instance_from_memory;
 
-type Result<T> = ::std::result::Result<T, ::failure::Error>;
+type Result<T> = std::result::Result<T, failure::Error>;
 
 #[derive(Debug)]
 pub struct SimpleAttribute {
@@ -73,14 +72,14 @@ impl Tagger {
 
         let r = unsafe {
             let x: &[u8] = data.as_ref();
-            crfsuite_create_instance_from_memory(transmute(x.as_ptr()), data.len(), &mut model)
+            crfsuite_create_instance_from_memory(x.as_ptr() as *const _, data.len(), &mut model)
         };
 
         if r != 0 {
             bail!("error while creating instance : non zero C return code...")
         }
 
-        let model: *mut crfsuite_sys::crfsuite_model_t = unsafe { transmute(model) };
+        let model: *mut crfsuite_sys::crfsuite_model_t = model as *mut _;
 
         let model = ModelWrapper { model };
 
@@ -92,7 +91,7 @@ impl Tagger {
         }
 
         Ok(Tagger {
-            model: model,
+            model,
             tagger: TaggerWrapper { tagger },
             bytes: data
         })
@@ -128,7 +127,7 @@ impl Tagger {
     }
 
     pub fn tag<A: Attribute>(&self, input: &[Vec<A>]) -> Result<Vec<String>> {
-        &self.set(input)?;
+        self.set(input)?;
         self.viterbi()
     }
 
@@ -149,19 +148,18 @@ impl Tagger {
             slice::from_raw_parts_mut(inst.items, inst.num_items as usize)
         };
 
-        for i in 0..input.len() {
-            let ref item = input[i];
-            let ref mut inst_item = inst_items[i];
+        for (i, item) in input.iter().enumerate() {
+            let inst_item = &mut inst_items[i];
 
             unsafe { crfsuite_sys::crfsuite_item_init(inst_item) };
 
-            for i in 0..item.len() {
-                let raw_pointer = item[i].get_attr()?.into_raw();
+            for inner_item in item.iter() {
+                let raw_pointer = inner_item.get_attr()?.into_raw();
                 let aid = attrs.str_to_id(raw_pointer);
 
                 if 0 <= aid {
-                    let mut cont = &mut unsafe { zeroed() };
-                    unsafe { crfsuite_sys::crfsuite_attribute_set(cont, aid, item[i].get_value()) };
+                    let cont = &mut unsafe { zeroed() };
+                    unsafe { crfsuite_sys::crfsuite_attribute_set(cont, aid, inner_item.get_value()) };
                     unsafe { crfsuite_sys::crfsuite_item_append_attribute(inst_item, cont) };
                 }
 
@@ -184,7 +182,9 @@ impl Tagger {
 
     pub fn viterbi(&self) -> Result<Vec<String>> {
         let t: usize = self.tagger.length() as usize;
-        if t <= 0 { return Ok(vec![]) }
+        if t == 0 {
+            return Ok(vec![]);
+        }
 
         let mut labels = null_mut();
 
@@ -206,9 +206,9 @@ impl Tagger {
 
         let mut yseq = Vec::with_capacity(t);
 
-        for i in 0..t {
+        for p in path.into_iter().take(t) {
             let mut label = null();
-            let r = labels.id_to_string(path[i], &mut label);
+            let r = labels.id_to_string(p, &mut label);
             if r != 0 {
                 bail!("failed to convert a label identifier to string")
             }
@@ -220,9 +220,11 @@ impl Tagger {
         Ok(yseq)
     }
 
-    pub fn probability(&self, tags: Vec<String>) -> Result<f64> {
+    pub fn probability(&self, tags: &[String]) -> Result<f64> {
         let t: usize = self.tagger.length() as usize;
-        if t <= 0 { return Ok(0.0) }
+        if t == 0 {
+            return Ok(0.0);
+        }
         if t != tags.len() {
             bail!("The number of items and labels differ |x| = {}, |y| = {}", t, tags.len());
         }
@@ -740,15 +742,15 @@ mod tests {
 
         t.set(&input).unwrap();
 
-        let p1 = t.probability(vec!["O".to_string(), "O".to_string(), "B-snips/number".to_string(), "O".to_string(), "O".to_string(), "O".to_string()]).unwrap();
+        let p1 = t.probability(&["O".to_string(), "O".to_string(), "B-snips/number".to_string(), "O".to_string(), "O".to_string(), "O".to_string()]).unwrap();
 
         assert!(p1.is_finite());
-        assert!(p1 - 0.999977801144 < 1e-6);
+        assert!(p1 - 0.999_977_801_144 < 1e-6);
 
-        let p2 = t.probability(vec!["O".to_string(), "O".to_string(), "O".to_string(), "O".to_string(), "O".to_string(), "O".to_string()]).unwrap();
+        let p2 = t.probability(&["O".to_string(), "O".to_string(), "O".to_string(), "O".to_string(), "O".to_string(), "O".to_string()]).unwrap();
 
         assert!(p2.is_finite());
-        assert!(p2 - 9.73062095825e-06 < 1e-12)
+        assert!(p2 - 9.730_620_958_25e-06 < 1e-12)
     }
 
     #[test]
