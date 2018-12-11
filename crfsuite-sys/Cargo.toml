@@ -2,7 +2,7 @@
 name = "crfsuite-sys"
 version = "0.2.0-pre"
 authors = ["Thibaut Lorrain <thibaut.lorrain@snips.ai>"]
-build = "build.rs"
+edition = "2018"
 links = "crfsuite"
 
 [build-dependencies]
