@@ -2,6 +2,7 @@
 name = "crfsuite"
 version = "0.2.0-pre"
 authors = ["Thibaut Lorrain <thibaut.lorrain@snips.ai>"]
+edition = "2018"
 
 [dependencies]
 failure = "0.1"

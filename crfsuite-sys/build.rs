@@ -1,16 +1,15 @@
-extern crate gcc;
 extern crate dinghy_build;
+extern crate gcc;
 
 use std::env;
-use std::path::Path;
-use std::io::{Write, Read};
 use std::fs::File;
+use std::io::{Read, Write};
+use std::path::Path;
 
 fn main() {
     gcc::Build::new()
         .include("c/include")
         //.define("USE_SSE", "1") // TODO check if target supports SSE and enable if so
-
         // lbfgs
         //.file("c/lbfgs/arithmetic_ansi.h")
         //.file("c/lbfgs/arithmetic_sse_double.h")
@@ -59,7 +58,8 @@ fn main() {
         .unwrap()
         .clang_arg("-v")
         .header("c/include/crfsuite.h")
-        .generate().unwrap()
+        .generate()
+        .unwrap()
         .write_to_file(&p)
         .expect("Couldn't write bindings!");
 
@@ -67,8 +67,12 @@ fn main() {
 
     // bindgen generate a compile error when building for arm android...
     let mut contents = String::new();
-    file.read_to_string(&mut contents).expect("unable to read file");
-    let contents = if target == "armv7-linux-androideabi" || target == "arm-linux-androideabi" || target == "aarch64-linux-android" {
+    file.read_to_string(&mut contents)
+        .expect("unable to read file");
+    let contents = if target == "armv7-linux-androideabi"
+        || target == "arm-linux-androideabi"
+        || target == "aarch64-linux-android"
+    {
         contents
             // the generated code will have a space or not depending if rustfmt in installed...
             .replace("pub type __va_list = __builtin_va_list;", "")
@@ -77,6 +81,9 @@ fn main() {
         contents
     };
 
-    let mut patched_file = File::create(Path::new(&out_dir).join("crfsuite.rs")).expect("couln't create crfsuite.rs");
-    patched_file.write_all(contents.as_bytes()).expect("couldn't wrote to patched crfsuite.rs");
+    let mut patched_file =
+        File::create(Path::new(&out_dir).join("crfsuite.rs")).expect("couln't create crfsuite.rs");
+    patched_file
+        .write_all(contents.as_bytes())
+        .expect("couldn't wrote to patched crfsuite.rs");
 }
