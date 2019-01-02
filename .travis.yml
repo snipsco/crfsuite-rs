@@ -1,19 +1,72 @@
 language: rust
 
-rust:
-  - stable
-  - beta
-  - nightly
+jobs:
+  allow_failures:
+    - rust: nightly
+  include:
+    - rust: stable
+      env: LINT=true
+    - rust: stable
+      env: TARGET_OS=android
+    - rust: nightly
+    - rust: stable
+      osx_image: xcode10.1
+      env: TARGET_OS=ios
+    - rust: stable
+      osx_image: xcode10.1
+      env: TARGET_OS=macos
 
-before_script:
-  - rustup component add rustfmt
-  - rustup component add clippy
+before_install:
+  - if [ "$TARGET_OS" = 'ios' ]; then
+      echo "=> Installing iOS targets";
+      rustup target add aarch64-apple-ios armv7-apple-ios armv7s-apple-ios x86_64-apple-ios i386-apple-ios;
+    fi
+
+  - if [ "$TARGET_OS" = 'android' ]; then
+      echo "=> Installing Android targets";
+      rustup target add aarch64-linux-android arm-linux-androideabi armv7-linux-androideabi i686-linux-android x86_64-linux-android;
+    fi
+
+  - if [ "$LINT" = true ]; then
+      echo "=> Installing linters";
+      rustup component add rustfmt;
+      rustup component add clippy;
+    fi
 
 script:
-  - cargo fmt --all -- --check
-  - cargo clippy --all-targets --all-features -- -D warnings
-  - cargo build
-  - cargo test
+  - if [ "$LINT" = true ]; then
+      echo "=> Start linter";
+      cargo fmt --all -- --check;
+      cargo clippy --all-targets --all-features -- -D warnings;
+    fi
+
+  - if [ "$TARGET_OS" = 'ios' ]; then
+      echo "=> Building iOS targets";
+
+      rustup target list | grep -E "default|installed"
+
+      cargo build --target aarch64-apple-ios;
+      cargo build --target armv7-apple-ios;
+      cargo build --target armv7s-apple-ios;
+      cargo build --target x86_64-apple-ios;
+      cargo build --target i386-apple-ios;
+
+    elif [ "$TARGET_OS" = 'android' ]; then
+      echo "=> Building Android targets";
+      rustup target list | grep -E "default|installed"
+      cargo build --target aarch64-linux-android;
+      cargo build --target arm-linux-androideabi;
+      cargo build --target armv7-linux-androideabi;
+      cargo build --target i686-linux-android;
+      cargo build --target x86_64-linux-android;
+
+    else
+      echo "=> Building host target";
+      rustup target list | grep -E "default|installed"
+      cargo build;
+      cargo test;
+
+    fi
 
 matrix:
   allow_failures:
