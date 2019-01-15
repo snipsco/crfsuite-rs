@@ -1,8 +1,3 @@
-#[macro_use]
-extern crate failure;
-extern crate crfsuite_sys;
-extern crate libc;
-
 use std::f64;
 use std::ffi::{CStr, CString};
 use std::fs::File;
@@ -15,6 +10,7 @@ use std::slice;
 
 use crfsuite_sys::crfsuite_create_instance_from_memory;
 use crfsuite_sys::floatval_t;
+use failure::bail;
 
 type Result<T> = std::result::Result<T, failure::Error>;
 

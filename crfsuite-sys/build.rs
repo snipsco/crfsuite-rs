@@ -1,6 +1,3 @@
-extern crate dinghy_build;
-extern crate cc;
-
 use std::env;
 use std::fs::File;
 use std::io::{Read, Write};
