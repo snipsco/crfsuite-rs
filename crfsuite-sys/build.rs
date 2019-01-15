@@ -1,13 +1,10 @@
-extern crate dinghy_build;
-extern crate gcc;
-
 use std::env;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 
 fn main() {
-    gcc::Build::new()
+    cc::Build::new()
         .include("c/include")
         //.define("USE_SSE", "1") // TODO check if target supports SSE and enable if so
         // lbfgs
