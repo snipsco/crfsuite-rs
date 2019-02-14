@@ -44,6 +44,7 @@ fn main() {
         .file("c/crf/crf1d_tag.c")
         .file("c/crf/crfsuite_train.c")
         .file("c/crf/crfsuite.c")
+        .flag_if_supported("-mmacosx-version-min=10.11")
         .compile("libcrfsuite.a");
 
     let out_dir = env::var("OUT_DIR").unwrap();
