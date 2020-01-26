@@ -52,11 +52,20 @@ fn main() {
     let target = env::var("TARGET").unwrap();
 
     let p = Path::new(&out_dir).join("crfsuite_orig.rs");
-    dinghy_build::new_bindgen_with_cross_compilation_support()
+    let bindgen = dinghy_build::new_bindgen_with_cross_compilation_support()
         .unwrap()
         .clang_arg("-v")
-        .header("c/include/crfsuite.h")
-        .generate()
+        .header("c/include/crfsuite.h");
+
+    let bindgen = if dinghy_build::build::is_cross_compiling()
+        .expect("It should be able to determine if it is cross-compiling")
+    {
+        bindgen.detect_include_paths(false)
+    } else {
+        bindgen
+    };
+
+    bindgen.generate()
         .unwrap()
         .write_to_file(&p)
         .expect("Couldn't write bindings!");
