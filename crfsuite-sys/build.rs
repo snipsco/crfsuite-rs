@@ -65,7 +65,8 @@ fn main() {
         bindgen
     };
 
-    bindgen.generate()
+    bindgen
+        .generate()
         .unwrap()
         .write_to_file(&p)
         .expect("Couldn't write bindings!");
