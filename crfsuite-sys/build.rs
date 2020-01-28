@@ -52,8 +52,7 @@ fn main() {
     let target = env::var("TARGET").unwrap();
 
     let p = Path::new(&out_dir).join("crfsuite_orig.rs");
-    dinghy_build::new_bindgen_with_cross_compilation_support()
-        .unwrap()
+    dinghy_build::dinghy_bindgen!()
         .clang_arg("-v")
         .header("c/include/crfsuite.h")
         .generate()
