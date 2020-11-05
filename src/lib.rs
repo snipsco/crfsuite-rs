@@ -10,9 +10,7 @@ use std::slice;
 
 use crfsuite_sys::crfsuite_create_instance_from_memory;
 use crfsuite_sys::floatval_t;
-use failure::bail;
-
-type Result<T> = std::result::Result<T, failure::Error>;
+use anyhow::{bail, Result};
 
 #[derive(Debug)]
 pub struct SimpleAttribute {
