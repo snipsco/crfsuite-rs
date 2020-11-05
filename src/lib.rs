@@ -8,9 +8,9 @@ use std::path::Path;
 use std::ptr::{null, null_mut};
 use std::slice;
 
+use anyhow::{bail, Result};
 use crfsuite_sys::crfsuite_create_instance_from_memory;
 use crfsuite_sys::floatval_t;
-use anyhow::{bail, Result};
 
 #[derive(Debug)]
 pub struct SimpleAttribute {
