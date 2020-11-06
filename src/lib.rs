@@ -8,11 +8,9 @@ use std::path::Path;
 use std::ptr::{null, null_mut};
 use std::slice;
 
+use anyhow::{bail, Result};
 use crfsuite_sys::crfsuite_create_instance_from_memory;
 use crfsuite_sys::floatval_t;
-use failure::bail;
-
-type Result<T> = std::result::Result<T, failure::Error>;
 
 #[derive(Debug)]
 pub struct SimpleAttribute {
