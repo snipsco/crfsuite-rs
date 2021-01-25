@@ -66,7 +66,11 @@ impl Tagger {
 
         let r = unsafe {
             let x: &[u8] = data.as_ref();
-            crfsuite_create_instance_from_memory(x.as_ptr() as *const _, data.len(), &mut model)
+            crfsuite_create_instance_from_memory(
+                x.as_ptr() as *const _,
+                data.len() as u64,
+                &mut model,
+            )
         };
 
         if r != 0 {
