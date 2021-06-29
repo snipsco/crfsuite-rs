@@ -1,3 +1,4 @@
+use std::convert::Into;
 use std::f64;
 use std::ffi::{CStr, CString};
 use std::fs::File;
@@ -68,7 +69,7 @@ impl Tagger {
             let x: &[u8] = data.as_ref();
             crfsuite_create_instance_from_memory(
                 x.as_ptr() as *const _,
-                data.len() as u64,
+                (data.len() as u32).into(),
                 &mut model,
             )
         };
