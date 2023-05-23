@@ -68,7 +68,7 @@ impl Tagger {
             let x: &[u8] = data.as_ref();
             crfsuite_create_instance_from_memory(
                 x.as_ptr() as *const _,
-                data.len() as libc::size_t,
+                data.len() as crfsuite_sys::size_t,
                 &mut model,
             )
         };

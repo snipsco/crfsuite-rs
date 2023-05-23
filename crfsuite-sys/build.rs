@@ -49,6 +49,7 @@ fn main() {
 
     let p = Path::new(&out_dir).join("crfsuite.rs");
     dinghy_build::dinghy_bindgen!()
+        .size_t_is_usize(false)
         .clang_arg("-v")
         .header("c/include/crfsuite.h")
         .generate()
