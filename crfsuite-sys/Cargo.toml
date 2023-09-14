@@ -8,8 +8,8 @@ links = "crfsuite"
 
 [build-dependencies]
 cc = "1.0"
-bindgen = "0.65"
-dinghy-build = "0.4.21"
+bindgen = "0.68.1"
+dinghy-build = "0.6.7"
 
 [dependencies]
 libc = "0.2"
